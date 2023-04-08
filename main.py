@@ -188,6 +188,7 @@ def main(args):
     for n, p in model_without_ddp.named_parameters():
         print(n)
         
+    print(os.path.join(args.output_dir, "/model.pth"))
     utils.save_on_master(model_without_ddp, os.path.join(args.output_dir, "/model.pth"))
 
     param_dicts = [
