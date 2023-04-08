@@ -18,6 +18,7 @@ from io import BytesIO
 
 import requests
 from io import BytesIO
+import urllib.request
 
 
 class CocoDetection(VisionDataset):
@@ -64,8 +65,11 @@ class CocoDetection(VisionDataset):
         
         #return Image.open(os.path.join(self.root, path)).convert('RGB')
         print(os.path.join(self.root, path))
-        response = requests.get(os.path.join(self.root, path))
-        return Image.open(BytesIO(response.content)).convert('RGB')
+        #response = requests.get(os.path.join(self.root, path))
+        #return Image.open(BytesIO(response.content)).convert('RGB')
+        
+        urllib.request.urlretrieve(os.path.join(self.root, path))
+        return Image.open(path)
 
     def __getitem__(self, index):
         """
