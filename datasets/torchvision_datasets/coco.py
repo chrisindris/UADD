@@ -63,6 +63,7 @@ class CocoDetection(VisionDataset):
             return Image.open(BytesIO(self.cache[path])).convert('RGB')
         
         #return Image.open(os.path.join(self.root, path)).convert('RGB')
+        print(os.path.join(self.root, path))
         response = requests.get(os.path.join(self.root, path))
         return Image.open(BytesIO(response.content)).convert('RGB')
 
