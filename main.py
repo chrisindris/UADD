@@ -107,8 +107,8 @@ def get_args_parser():
 
     # dataset parameters
     parser.add_argument('--dataset_file', default='coco')
+    parser.add_argument('--coco_path', default='./data/coco', type=str)
     #parser.add_argument('--coco_path', default='/content/drive/MyDrive/TMU/CP8207-DIP/Project/data/coco', type=str)
-    parser.add_argument('--coco_path', default='http://images.cocodataset.org/', type=str)
     parser.add_argument('--coco_panoptic_path', type=str)
     parser.add_argument('--remove_difficult', action='store_true')
 
