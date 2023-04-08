@@ -16,6 +16,9 @@ import os.path
 import tqdm
 from io import BytesIO
 
+import requests
+from io import BytesIO
+
 
 class CocoDetection(VisionDataset):
     """`MS Coco Detection <http://mscoco.org/dataset/#detections-challenge2016>`_ Dataset.
@@ -58,7 +61,10 @@ class CocoDetection(VisionDataset):
                 with open(os.path.join(self.root, path), 'rb') as f:
                     self.cache[path] = f.read()
             return Image.open(BytesIO(self.cache[path])).convert('RGB')
-        return Image.open(os.path.join(self.root, path)).convert('RGB')
+        
+        #return Image.open(os.path.join(self.root, path)).convert('RGB')
+        response = requests.get(os.path.join(self.root, path))
+        return Image.open(BytesIO(response.content)).convert('RGB')
 
     def __getitem__(self, index):
         """
