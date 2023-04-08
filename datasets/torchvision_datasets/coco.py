@@ -68,8 +68,10 @@ class CocoDetection(VisionDataset):
         #response = requests.get(os.path.join(self.root, path))
         #return Image.open(BytesIO(response.content)).convert('RGB')
         
-        urllib.request.urlretrieve(os.path.join(self.root, path))
-        return Image.open(path)
+        #urllib.request.urlretrieve(os.path.join(self.root, path))
+        #return Image.open(path)
+        
+        return Image.open(requests.get(os.path.join(self.root, path), stream=True).raw)
 
     def __getitem__(self, index):
         """
