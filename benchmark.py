@@ -6,6 +6,8 @@
 
 """
 Benchmark inference speed of Deformable DETR.
+
+This could be passed into one of the scripts for evaluation.
 """
 import os
 import time
@@ -19,7 +21,7 @@ from datasets import build_dataset
 from util.misc import nested_tensor_from_tensor_list
 
 
-def get_benckmark_arg_parser():
+def get_benchmark_arg_parser():
     parser = argparse.ArgumentParser('Benchmark inference speed of Deformable DETR.')
     parser.add_argument('--num_iters', type=int, default=300, help='total iters to benchmark speed')
     parser.add_argument('--warm_iters', type=int, default=5, help='ignore first several iters that are very slow')
@@ -44,7 +46,7 @@ def measure_average_inference_time(model, inputs, num_iters=100, warm_iters=5):
 
 
 def benchmark():
-    args, _ = get_benckmark_arg_parser().parse_known_args()
+    args, _ = get_benchmark_arg_parser().parse_known_args()
     main_args = get_main_args_parser().parse_args(_)
     assert args.warm_iters < args.num_iters and args.num_iters > 0 and args.warm_iters >= 0
     assert args.batch_size > 0
