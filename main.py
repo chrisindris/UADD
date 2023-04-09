@@ -37,7 +37,7 @@ def get_args_parser():
     parser.add_argument('--lr_linear_proj_mult', default=0.1, type=float)
     parser.add_argument('--batch_size', default=2, type=int)
     parser.add_argument('--weight_decay', default=1e-4, type=float)
-    parser.add_argument('--epochs', default=2, type=int)
+    parser.add_argument('--epochs', default=1, type=int)
     parser.add_argument('--lr_drop', default=40, type=int)
     parser.add_argument('--lr_drop_epochs', default=None, type=int, nargs='+')
     parser.add_argument('--clip_max_norm', default=0.1, type=float,
@@ -175,6 +175,9 @@ def main(args):
     data_loader_val = DataLoader(dataset_val, args.batch_size, sampler=sampler_val,
                                  drop_last=False, collate_fn=utils.collate_fn, num_workers=args.num_workers,
                                  pin_memory=True)
+    
+    # pass through forward
+    batch = next(iter(data_loader_train))
 
     # lr_backbone_names = ["backbone.0", "backbone.neck", "input_proj", "transformer.encoder"]
     def match_name_keywords(n, name_keywords):
@@ -188,8 +191,9 @@ def main(args):
     for n, p in model_without_ddp.named_parameters():
         print(n)
         
-    utils.save_on_master(model_without_ddp.named_parameters(), os.path.join(args.output_dir, "model_named_params.pth"))
+    # save model
     utils.save_on_master(model_without_ddp.state_dict(), os.path.join(args.output_dir, "model_state_dict.pth"))
+    print(model_without_ddp)
 
     param_dicts = [
         {
