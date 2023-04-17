@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# Like the single_scale version, but we dilate the C5 stage of the backbone 
+# (see the original DETR paper and https://arxiv.org/abs/1611.07709)
+
 set -x
 
 EXP_DIR=exps/r50_deformable_detr_single_scale_dc5

@@ -6,6 +6,8 @@
 # Modified from https://github.com/pytorch/pytorch/blob/173f224570017b4b1a3a1a13d0bff280a54d9cd9/torch/distributed/launch.py
 # --------------------------------------------------------------------------------------------------------------------------
 
+# Handles the multiple processes that may be used for distributed training, and on those processes we run some command (ie. training script, a .sh file).
+
 r"""
 `torch.distributed.launch` is a module that spawns up multiple distributed
 training processes on each of the training nodes.
@@ -178,11 +180,14 @@ def main():
 
         cmd = [args.training_script] + args.training_script_args
 
+        # start the command with a specific environment. Popen is upgraded call().
+        # processs is a pointer to stream
+        # The cmd is always the same (copied from run_dist_launch), so it must be controlled by environment?
         process = subprocess.Popen(cmd, env=current_env)
         processes.append(process)
 
     for process in processes:
-        process.wait()
+        process.wait() # wait for child process to terminate (ie. return 0 if there are no errors).
         if process.returncode != 0:
             raise subprocess.CalledProcessError(returncode=process.returncode,
                                                 cmd=process.args)

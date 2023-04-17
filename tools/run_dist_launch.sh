@@ -5,6 +5,8 @@
 # Licensed under the Apache License, Version 2.0 [see LICENSE for details]
 # ------------------------------------------------------------------------
 
+# Sets the environment variables and then calls launch to distribute the training.
+
 set -x # prints to console the variables before setting them
 
 GPUS=$1 # num of GPUs to use
@@ -19,6 +21,7 @@ MASTER_PORT=${MASTER_PORT:-"29500"}
 NODE_RANK=${NODE_RANK:-0}
 
 # For distributed training; may have several nodes with several GPUs each
+# we use 1 GPU for each process
 let "NNODES=GPUS/GPUS_PER_NODE"
 
 python ./tools/launch.py \
