@@ -5,9 +5,9 @@
 # Licensed under the Apache License, Version 2.0 [see LICENSE for details]
 # ------------------------------------------------------------------------
 
-set -x
+set -x # prints to console the variables before setting them
 
-GPUS=$1
+GPUS=$1 # num of GPUs to use
 RUN_COMMAND=${@:2}
 if [ $GPUS -lt 8 ]; then
     GPUS_PER_NODE=${GPUS_PER_NODE:-$GPUS}
@@ -18,6 +18,7 @@ MASTER_ADDR=${MASTER_ADDR:-"127.0.0.1"}
 MASTER_PORT=${MASTER_PORT:-"29500"}
 NODE_RANK=${NODE_RANK:-0}
 
+# For distributed training; may have several nodes with several GPUs each
 let "NNODES=GPUS/GPUS_PER_NODE"
 
 python ./tools/launch.py \
