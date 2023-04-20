@@ -32,7 +32,7 @@ torch.manual_seed(3)
 def check_forward_equal_with_pytorch_double():
     value = torch.rand(N, S, M, D).cuda() * 0.01
     sampling_locations = torch.rand(N, Lq, M, L, P, 2).cuda()
-    attention_weights = torch.rand(N, Lq, M, L, P).cuda() + 1e-5
+    attention_weights = torch.rand(N, Lq, M, L, P).cuda() + 1e-5 # attention weights: tensor of size (1,2,2,2,2)
     attention_weights /= attention_weights.sum(-1, keepdim=True).sum(-2, keepdim=True)
     im2col_step = 2
     output_pytorch = ms_deform_attn_core_pytorch(value.double(), shapes, sampling_locations.double(), attention_weights.double()).detach().cpu()
