@@ -209,6 +209,9 @@ class DeformableTransformerEncoderLayer(nn.Module):
     @staticmethod
     def with_pos_embed(tensor, pos):
         return tensor if pos is None else tensor + pos
+    
+
+    # -- Forward: Passing the array through --
 
     def forward_ffn(self, src):
         src2 = self.linear2(self.dropout2(self.activation(self.linear1(src))))
@@ -217,6 +220,8 @@ class DeformableTransformerEncoderLayer(nn.Module):
         return src
 
     def forward(self, src, pos, reference_points, spatial_shapes, level_start_index, padding_mask=None):
+        # src: the source (input) ie. the extracted features
+
         # self attention
         src2 = self.self_attn(self.with_pos_embed(src, pos), reference_points, src, spatial_shapes, level_start_index, padding_mask)
         src = src + self.dropout1(src2)
@@ -264,6 +269,8 @@ class DeformableTransformerDecoderLayer(nn.Module):
                  n_levels=4, n_heads=8, n_points=4):
         super().__init__()
 
+        # we are just making variables here, so the order doesn't matter.
+
         # cross attention
         self.cross_attn = MSDeformAttn(d_model, n_levels, n_heads, n_points)
         self.dropout1 = nn.Dropout(dropout)
@@ -293,6 +300,9 @@ class DeformableTransformerDecoderLayer(nn.Module):
         return tgt
 
     def forward(self, tgt, query_pos, reference_points, src, src_spatial_shapes, level_start_index, src_padding_mask=None):
+        # tgt: target (the bounding box proposals)
+        # reference points: for deformable attention
+
         # self attention
         q = k = self.with_pos_embed(tgt, query_pos)
         tgt2 = self.self_attn(q.transpose(0, 1), k.transpose(0, 1), tgt.transpose(0, 1))[0].transpose(0, 1)
@@ -361,6 +371,8 @@ class DeformableTransformerDecoder(nn.Module):
 
 
 def _get_clones(module, N):
+    """ Clones the encoder or decoder block N=6 times.
+    """
     return nn.ModuleList([copy.deepcopy(module) for i in range(N)])
 
 

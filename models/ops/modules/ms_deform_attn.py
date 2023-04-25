@@ -6,6 +6,8 @@
 # Modified from https://github.com/chengdazhi/Deformable-Convolution-V2-PyTorch/tree/pytorch_1.0.0
 # ------------------------------------------------------------------------------------------------
 
+# Here is where the deformable attention module is defined.
+
 from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division

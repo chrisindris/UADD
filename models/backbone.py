@@ -102,14 +102,17 @@ class Backbone(BackboneBase):
         norm_layer = FrozenBatchNorm2d
         backbone = getattr(torchvision.models, name)(
             replace_stride_with_dilation=[False, False, dilation],
-            pretrained=is_main_process(), norm_layer=norm_layer)
+            pretrained=is_main_process(), norm_layer=norm_layer) # get the resnet50 backbone
         assert name not in ('resnet18', 'resnet34'), "number of channels are hard coded"
-        super().__init__(backbone, train_backbone, return_interm_layers)
+        super().__init__(backbone, train_backbone, return_interm_layers) # BackboneBase
+        # for dilation, we reduce the stride length of the last layer by factor 2
         if dilation:
             self.strides[-1] = self.strides[-1] // 2
 
 
 class Joiner(nn.Sequential):
+    """ This sequentially joins the backbone with the positional embedding (which is expressed as a module)
+    """
     def __init__(self, backbone, position_embedding):
         super().__init__(backbone, position_embedding)
         self.strides = backbone.strides
