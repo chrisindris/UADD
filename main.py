@@ -7,6 +7,8 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 # ------------------------------------------------------------------------
 
+# Trains and evaluates (tests) the Deformable DETR model.
+
 
 import argparse
 import datetime
@@ -30,21 +32,21 @@ from models import build_model
 
 def get_args_parser():
     parser = argparse.ArgumentParser('Deformable DETR Detector', add_help=False)
-    parser.add_argument('--lr', default=2e-4, type=float)
-    parser.add_argument('--lr_backbone_names', default=["backbone.0"], type=str, nargs='+')
-    parser.add_argument('--lr_backbone', default=2e-5, type=float)
+    parser.add_argument('--lr', default=2e-4, type=float) # base learning rate
+    parser.add_argument('--lr_backbone_names', default=["backbone.0"], type=str, nargs='+') # names of the backbone elements to train
+    parser.add_argument('--lr_backbone', default=2e-5, type=float) # learning rate of backbone
     parser.add_argument('--lr_linear_proj_names', default=['reference_points', 'sampling_offsets'], type=str, nargs='+')
     parser.add_argument('--lr_linear_proj_mult', default=0.1, type=float)
     parser.add_argument('--batch_size', default=2, type=int)
-    parser.add_argument('--weight_decay', default=1e-4, type=float)
-    parser.add_argument('--epochs', default=1, type=int)
-    parser.add_argument('--lr_drop', default=40, type=int)
-    parser.add_argument('--lr_drop_epochs', default=None, type=int, nargs='+')
+    parser.add_argument('--weight_decay', default=1e-4, type=float) # weight decayed by factor of 0.1
+    parser.add_argument('--epochs', default=1, type=int) # num of epochs to train
+    parser.add_argument('--lr_drop', default=40, type=int) # weight is decayed at 40th epoch
+    parser.add_argument('--lr_drop_epochs', default=None, type=int, nargs='+') # unused
     parser.add_argument('--clip_max_norm', default=0.1, type=float,
-                        help='gradient clipping max norm')
+                        help='gradient clipping max norm') # helps with vanishing/exploding gradients
 
 
-    parser.add_argument('--sgd', action='store_true')
+    parser.add_argument('--sgd', action='store_true') # SGD training; boolean, defaults to true
 
     # Variants of Deformable DETR
     parser.add_argument('--with_box_refine', default=False, action='store_true')
@@ -58,12 +60,12 @@ def get_args_parser():
     parser.add_argument('--backbone', default='resnet50', type=str,
                         help="Name of the convolutional backbone to use")
     parser.add_argument('--dilation', action='store_true',
-                        help="If true, we replace stride with dilation in the last convolutional block (DC5)")
+                        help="If true, we replace stride with dilation in the last convolutional block (DC5)") # dilating
     parser.add_argument('--position_embedding', default='sine', type=str, choices=('sine', 'learned'),
                         help="Type of positional embedding to use on top of the image features")
     parser.add_argument('--position_embedding_scale', default=2 * np.pi, type=float,
                         help="position / size * scale")
-    parser.add_argument('--num_feature_levels', default=4, type=int, help='number of feature levels')
+    parser.add_argument('--num_feature_levels', default=4, type=int, help='number of feature levels') # specifies how many feature maps (scales) to get features from for transformer
 
     # * Transformer
     parser.add_argument('--enc_layers', default=6, type=int,
@@ -73,14 +75,14 @@ def get_args_parser():
     parser.add_argument('--dim_feedforward', default=1024, type=int,
                         help="Intermediate size of the feedforward layers in the transformer blocks")
     parser.add_argument('--hidden_dim', default=256, type=int,
-                        help="Size of the embeddings (dimension of the transformer)")
+                        help="Size of the embeddings (dimension of the transformer)") # num of channels (the feature map sequence is size dHW)
     parser.add_argument('--dropout', default=0.1, type=float,
-                        help="Dropout applied in the transformer")
+                        help="Dropout applied in the transformer") # in transformers, we can regularize by applying dropout to each sublayer output (before adding to sub-layer input and normalized); as well as sums of embeddings/pos encodings in encoder/decoder.
     parser.add_argument('--nheads', default=8, type=int,
-                        help="Number of attention heads inside the transformer's attentions")
+                        help="Number of attention heads inside the transformer's attentions") # number of heads for multi-head attention
     parser.add_argument('--num_queries', default=300, type=int,
-                        help="Number of query slots")
-    parser.add_argument('--dec_n_points', default=4, type=int)
+                        help="Number of query slots") # number of object queries to use
+    parser.add_argument('--dec_n_points', default=4, type=int) # the number of points around the reference point to apply (deformable) attention to
     parser.add_argument('--enc_n_points', default=4, type=int)
 
     # * Segmentation
@@ -91,28 +93,28 @@ def get_args_parser():
     parser.add_argument('--no_aux_loss', dest='aux_loss', action='store_false',
                         help="Disables auxiliary decoding losses (loss at each layer)")
 
-    # * Matcher
+    # * Matcher # used in hungarian
     parser.add_argument('--set_cost_class', default=2, type=float,
                         help="Class coefficient in the matching cost")
     parser.add_argument('--set_cost_bbox', default=5, type=float,
                         help="L1 box coefficient in the matching cost")
     parser.add_argument('--set_cost_giou', default=2, type=float,
-                        help="giou box coefficient in the matching cost")
+                        help="giou box coefficient in the matching cost") # GIoU loss
 
-    # * Loss coefficients
+    # * Loss coefficients # used in deformable_detr
     parser.add_argument('--mask_loss_coef', default=1, type=float)
     parser.add_argument('--dice_loss_coef', default=1, type=float)
     parser.add_argument('--cls_loss_coef', default=2, type=float)
     parser.add_argument('--bbox_loss_coef', default=5, type=float)
     parser.add_argument('--giou_loss_coef', default=2, type=float)
-    parser.add_argument('--focal_alpha', default=0.25, type=float)
+    parser.add_argument('--focal_alpha', default=0.25, type=float) # focal loss for dense object detection
 
     # dataset parameters
     parser.add_argument('--dataset_file', default='coco')
     parser.add_argument('--coco_path', default='./data/coco', type=str)
     #parser.add_argument('--coco_path', default='/content/drive/MyDrive/TMU/CP8207-DIP/Project/data/coco', type=str)
     parser.add_argument('--coco_panoptic_path', type=str)
-    parser.add_argument('--remove_difficult', action='store_true')
+    parser.add_argument('--remove_difficult', action='store_true') # remove the difficult images?
 
     parser.add_argument('--output_dir', default='exps/r50_deformable_detr',
                         help='path where to save, empty for no saving')
@@ -130,7 +132,15 @@ def get_args_parser():
 
 
 def main(args):
-    utils.init_distributed_mode(args)
+    """Main loop for training and evaluation.
+
+    Args:
+        args (various): see get_args_parser
+
+    Returns:
+        None
+    """
+    utils.init_distributed_mode(args) # for distributed training: sets args.distributed=True?
     print("git:\n  {}\n".format(utils.get_sha()))
 
     if args.frozen_weights is not None:
@@ -145,16 +155,19 @@ def main(args):
     np.random.seed(seed)
     random.seed(seed)
 
+    # build the model architecture
     model, criterion, postprocessors = build_model(args)
     model.to(device)
 
-    model_without_ddp = model
+    model_without_ddp = model # ddp = distributed data parallel
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print('number of params:', n_parameters)
+    print('number of params:', n_parameters) # number of trainable parameters
 
+    # build the training and testing datasets
     dataset_train = build_dataset(image_set='train', args=args)
     dataset_val = build_dataset(image_set='val', args=args)
 
+    # Specifies a sampler (sequence for data loading) 
     if args.distributed:
         if args.cache_mode:
             sampler_train = samplers.NodeDistributedSampler(dataset_train)
@@ -168,6 +181,8 @@ def main(args):
 
     batch_sampler_train = torch.utils.data.BatchSampler(
         sampler_train, args.batch_size, drop_last=True)
+    
+    # Create the data loaders (iterable for loading data into model)
 
     data_loader_train = DataLoader(dataset_train, batch_sampler=batch_sampler_train,
                                    collate_fn=utils.collate_fn, num_workers=args.num_workers,
@@ -178,6 +193,16 @@ def main(args):
 
     # lr_backbone_names = ["backbone.0", "backbone.neck", "input_proj", "transformer.encoder"]
     def match_name_keywords(n, name_keywords):
+        """Check if any element of name_keywords is found in list n.
+        Will be used to filter n (list of named params) according to a small list of keywords.
+
+        Args:
+            n (list): list of named params
+            name_keywords (list): list of (subsets of) named params
+
+        Returns:
+            boolean: _description_
+        """
         out = False
         for b in name_keywords:
             if b in n:
@@ -192,6 +217,7 @@ def main(args):
     utils.save_on_master(model_without_ddp.state_dict(), os.path.join(args.output_dir, "model_state_dict.pth"))
     print(model_without_ddp)
 
+    # mapping from the layer name to the learning rate
     param_dicts = [
         {
             "params":
@@ -214,7 +240,7 @@ def main(args):
     else:
         optimizer = torch.optim.AdamW(param_dicts, lr=args.lr,
                                       weight_decay=args.weight_decay)
-    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, args.lr_drop)
+    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, args.lr_drop) # create a scheduler for the learning rate
 
     if args.distributed:
         model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
@@ -274,13 +300,16 @@ def main(args):
             utils.save_on_master(coco_evaluator.coco_eval["bbox"].eval, output_dir / "eval.pth")
         return
 
+    # -- Perform the training --
     print("Start training")
     start_time = time.time()
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
             sampler_train.set_epoch(epoch)
+            
         train_stats = train_one_epoch(
             model, criterion, data_loader_train, optimizer, device, epoch, args.clip_max_norm)
+        
         lr_scheduler.step()
         if args.output_dir:
             checkpoint_paths = [output_dir / 'checkpoint.pth']

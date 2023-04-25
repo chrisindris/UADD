@@ -7,6 +7,8 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 # ------------------------------------------------------------------------
 
+# Build the Deformable DETR architecture.
+
 """
 Deformable DETR model and criterion classes.
 """
@@ -442,14 +444,19 @@ class MLP(nn.Module):
 
 
 def build(args):
+    # num_classes (from the dataset)
     num_classes = 20 if args.dataset_file != 'coco' else 91
     if args.dataset_file == "coco_panoptic":
         num_classes = 250
     device = torch.device(args.device)
 
+    # make the backbone
     backbone = build_backbone(args)
-
+    
+    # make the transformer
     transformer = build_deforamble_transformer(args)
+    
+    # Make the overall Deformable DETR model
     model = DeformableDETR(
         backbone,
         transformer,
@@ -460,16 +467,21 @@ def build(args):
         with_box_refine=args.with_box_refine,
         two_stage=args.two_stage,
     )
+    
     if args.masks:
         model = DETRsegm(model, freeze_detr=(args.frozen_weights is not None))
+        
+    # make the hungarian matcher for training    
     matcher = build_matcher(args)
+    
+    # Dictionary of the loss coefficients
     weight_dict = {'loss_ce': args.cls_loss_coef, 'loss_bbox': args.bbox_loss_coef}
     weight_dict['loss_giou'] = args.giou_loss_coef
     if args.masks:
         weight_dict["loss_mask"] = args.mask_loss_coef
         weight_dict["loss_dice"] = args.dice_loss_coef
     # TODO this is a hack
-    if args.aux_loss:
+    if args.aux_loss: # auxiliary losses (losses at each of the N=6 decoder layers) in addition to the losses added to weight_dict above
         aux_weight_dict = {}
         for i in range(args.dec_layers - 1):
             aux_weight_dict.update({k + f'_{i}': v for k, v in weight_dict.items()})
@@ -480,8 +492,12 @@ def build(args):
     if args.masks:
         losses += ["masks"]
     # num_classes, matcher, weight_dict, losses, focal_alpha=0.25
+    
+    
     criterion = SetCriterion(num_classes, matcher, weight_dict, losses, focal_alpha=args.focal_alpha)
     criterion.to(device)
+    
+    
     postprocessors = {'bbox': PostProcess()}
     if args.masks:
         postprocessors['segm'] = PostProcessSegm()
