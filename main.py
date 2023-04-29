@@ -128,6 +128,9 @@ def get_args_parser():
     parser.add_argument('--eval', action='store_true')
     parser.add_argument('--num_workers', default=2, type=int)
     parser.add_argument('--cache_mode', default=True, action='store_true', help='whether to cache images on memory')
+    
+    # ECA
+    parser.add_argument('--eca', action='store_true', help="Use ECA")
 
     return parser
 

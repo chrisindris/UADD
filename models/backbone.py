@@ -20,8 +20,9 @@ from torchvision.models._utils import IntermediateLayerGetter
 from typing import Dict, List
 
 from util.misc import NestedTensor, is_main_process
-
 from .position_encoding import build_position_encoding
+
+from ECANet.models.eca_resnet import eca_resnet50
 
 
 class FrozenBatchNorm2d(torch.nn.Module):
@@ -108,11 +109,17 @@ class Backbone(BackboneBase):
     def __init__(self, name: str,
                  train_backbone: bool,
                  return_interm_layers: bool,
-                 dilation: bool):
+                 dilation: bool,
+                 eca: bool):
         norm_layer = FrozenBatchNorm2d
-        backbone = getattr(torchvision.models, name)(
-            replace_stride_with_dilation=[False, False, dilation],
-            pretrained=is_main_process(), norm_layer=norm_layer) # get the resnet50 backbone
+        
+        if eca:
+            backbone = eca_resnet50()
+        else: 
+            backbone = getattr(torchvision.models, name)(
+                replace_stride_with_dilation=[False, False, dilation],
+                pretrained=is_main_process(), norm_layer=norm_layer) # get the resnet50 backbone
+        
         assert name not in ('resnet18', 'resnet34'), "number of channels are hard coded"
         super().__init__(backbone, train_backbone, return_interm_layers) # BackboneBase
         # for dilation, we reduce the stride length of the last layer by factor 2
@@ -146,6 +153,6 @@ def build_backbone(args):
     position_embedding = build_position_encoding(args)
     train_backbone = args.lr_backbone > 0
     return_interm_layers = args.masks or (args.num_feature_levels > 1)
-    backbone = Backbone(args.backbone, train_backbone, return_interm_layers, args.dilation)
+    backbone = Backbone(args.backbone, train_backbone, return_interm_layers, args.dilation, args.eca)
     model = Joiner(backbone, position_embedding) # place the positional embedding after the backbone
     return model
