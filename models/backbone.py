@@ -32,9 +32,13 @@ class FrozenBatchNorm2d(torch.nn.Module):
     without which any other models than torchvision.models.resnet[18,34,50,101]
     produce nans.
     """
+    # make training faster and more stable by normalizing activation vectors
+    # frozen: stats and affine params are fixed 
 
     def __init__(self, n, eps=1e-5):
         super(FrozenBatchNorm2d, self).__init__()
+        # register buffer: open RAM for parameters not optimized during training.
+        # ie. they are consistent values (ie. frozen norm)
         self.register_buffer("weight", torch.ones(n))
         self.register_buffer("bias", torch.zeros(n))
         self.register_buffer("running_mean", torch.zeros(n))
@@ -61,16 +65,22 @@ class FrozenBatchNorm2d(torch.nn.Module):
         eps = self.eps
         scale = w * (rv + eps).rsqrt()
         bias = b - rm * scale
-        return x * scale + bias
+        return x * scale + bias # returns the layer's output by applying linear transform of the scale and bias
 
 
 class BackboneBase(nn.Module):
+    """ Base class for backbone (ie. a general backbone)
+    """
 
     def __init__(self, backbone: nn.Module, train_backbone: bool, return_interm_layers: bool):
         super().__init__()
         for name, parameter in backbone.named_parameters():
             if not train_backbone or 'layer2' not in name and 'layer3' not in name and 'layer4' not in name:
                 parameter.requires_grad_(False)
+        
+        # C = 2048
+        # H,W = H0/32, W0/32        
+        
         if return_interm_layers:
             # return_layers = {"layer1": "0", "layer2": "1", "layer3": "2", "layer4": "3"}
             return_layers = {"layer2": "0", "layer3": "1", "layer4": "2"}
@@ -83,13 +93,13 @@ class BackboneBase(nn.Module):
         self.body = IntermediateLayerGetter(backbone, return_layers=return_layers)
 
     def forward(self, tensor_list: NestedTensor):
-        xs = self.body(tensor_list.tensors)
+        xs = self.body(tensor_list.tensors) # pass images through backbone to get feature maps
         out: Dict[str, NestedTensor] = {}
         for name, x in xs.items():
             m = tensor_list.mask
             assert m is not None
-            mask = F.interpolate(m[None].float(), size=x.shape[-2:]).to(torch.bool)[0]
-            out[name] = NestedTensor(x, mask)
+            mask = F.interpolate(m[None].float(), size=x.shape[-2:]).to(torch.bool)[0] # ensure the mask matches the size of the feature maps
+            out[name] = NestedTensor(x, mask) # the feature map and the mask
         return out
 
 
@@ -119,17 +129,17 @@ class Joiner(nn.Sequential):
         self.num_channels = backbone.num_channels
 
     def forward(self, tensor_list: NestedTensor):
-        xs = self[0](tensor_list)
-        out: List[NestedTensor] = []
+        xs = self[0](tensor_list) # send the input (images?) through the backbone.
+        out: List[NestedTensor] = [] # a list of nested tensors.
         pos = []
-        for name, x in sorted(xs.items()):
-            out.append(x)
+        for name, x in sorted(xs.items()): # items() means that the dict structure of name, x becomes list of tuples
+            out.append(x) # output of backbone
 
         # position encoding
         for x in out:
-            pos.append(self[1](x).to(x.tensors.dtype))
+            pos.append(self[1](x).to(x.tensors.dtype)) # the associated position
 
-        return out, pos
+        return out, pos # the backbone features and the encoding
 
 
 def build_backbone(args):
@@ -137,5 +147,5 @@ def build_backbone(args):
     train_backbone = args.lr_backbone > 0
     return_interm_layers = args.masks or (args.num_feature_levels > 1)
     backbone = Backbone(args.backbone, train_backbone, return_interm_layers, args.dilation)
-    model = Joiner(backbone, position_embedding)
+    model = Joiner(backbone, position_embedding) # place the positional embedding after the backbone
     return model

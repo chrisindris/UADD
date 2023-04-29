@@ -7,6 +7,8 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 # ------------------------------------------------------------------------
 
+# Builds the deformable transformer.
+
 import copy
 from typing import Optional, List
 import math
@@ -26,9 +28,26 @@ class DeformableTransformer(nn.Module):
                  activation="relu", return_intermediate_dec=False,
                  num_feature_levels=4, dec_n_points=4,  enc_n_points=4,
                  two_stage=False, two_stage_num_proposals=300):
+        """Initialization of the class.
+
+        Args:
+            d_model (int, optional): _description_. Defaults to 256.
+            nhead (int, optional): _description_. Defaults to 8.
+            num_encoder_layers (int, optional): _description_. Defaults to 6.
+            num_decoder_layers (int, optional): _description_. Defaults to 6.
+            dim_feedforward (int, optional): _description_. Defaults to 1024.
+            dropout (float, optional): _description_. Defaults to 0.1.
+            activation (str, optional): _description_. Defaults to "relu".
+            return_intermediate_dec (bool, optional): _description_. Defaults to False.
+            num_feature_levels (int, optional): _description_. Defaults to 4.
+            dec_n_points (int, optional): _description_. Defaults to 4.
+            enc_n_points (int, optional): _description_. Defaults to 4.
+            two_stage (bool, optional): _description_. Defaults to False.
+            two_stage_num_proposals (int, optional): _description_. Defaults to 300.
+        """
         super().__init__()
 
-        self.d_model = d_model
+        self.d_model = d_model # all multi-scale feature maps have d_model channels.
         self.nhead = nhead
         self.two_stage = two_stage
         self.two_stage_num_proposals = two_stage_num_proposals
@@ -43,42 +62,53 @@ class DeformableTransformer(nn.Module):
                                                           num_feature_levels, nhead, dec_n_points)
         self.decoder = DeformableTransformerDecoder(decoder_layer, num_decoder_layers, return_intermediate_dec)
 
-        self.level_embed = nn.Parameter(torch.Tensor(num_feature_levels, d_model))
+        self.level_embed = nn.Parameter(torch.Tensor(num_feature_levels, d_model)) # level embedding + trained jointly with network
 
         if two_stage:
+            # Stage 1: encoder generates region proposals
+            # Stage 2: decoder refines these object queries
             self.enc_output = nn.Linear(d_model, d_model)
             self.enc_output_norm = nn.LayerNorm(d_model)
             self.pos_trans = nn.Linear(d_model * 2, d_model * 2)
             self.pos_trans_norm = nn.LayerNorm(d_model * 2)
         else:
+            # If no proposals, we use reference points
             self.reference_points = nn.Linear(d_model, 2)
 
         self._reset_parameters()
 
     def _reset_parameters(self):
-        for p in self.parameters():
+        for p in self.parameters(): # something like a uniform initialization
             if p.dim() > 1:
                 nn.init.xavier_uniform_(p)
-        for m in self.modules():
+        for m in self.modules(): # reset the deformable attention weights
             if isinstance(m, MSDeformAttn):
-                m._reset_parameters()
+                m._reset_parameters() # implemented in MSDeformAttn
         if not self.two_stage:
             xavier_uniform_(self.reference_points.weight.data, gain=1.0)
             constant_(self.reference_points.bias.data, 0.)
-        normal_(self.level_embed)
+        normal_(self.level_embed) # scale-level embeddings are randomly initialized
 
     def get_proposal_pos_embed(self, proposals):
+        """For two-stage; get the positional embedding of the stage 1 proposals
+
+        Args:
+            proposals (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """
         num_pos_feats = 128
         temperature = 10000
         scale = 2 * math.pi
 
-        dim_t = torch.arange(num_pos_feats, dtype=torch.float32, device=proposals.device)
+        dim_t = torch.arange(num_pos_feats, dtype=torch.float32, device=proposals.device) # size 128 vector, 0 to 127
         dim_t = temperature ** (2 * (dim_t // 2) / num_pos_feats)
-        # N, L, 4
+        # N, L, 4 # N=count per layer, L is layers, 4 because bbox
         proposals = proposals.sigmoid() * scale
         # N, L, 4, 128
-        pos = proposals[:, :, :, None] / dim_t
-        # N, L, 4, 64, 2
+        pos = proposals[:, :, :, None] / dim_t # None adds a new axis, of size 128 due to dimension
+        # N, L, 4, 64, 2 # 64 are sin, 64 are cos
         pos = torch.stack((pos[:, :, :, 0::2].sin(), pos[:, :, :, 1::2].cos()), dim=4).flatten(2)
         return pos
 
@@ -87,7 +117,7 @@ class DeformableTransformer(nn.Module):
         base_scale = 4.0
         proposals = []
         _cur = 0
-        for lvl, (H_, W_) in enumerate(spatial_shapes):
+        for lvl, (H_, W_) in enumerate(spatial_shapes): # This is the shape of the object
             mask_flatten_ = memory_padding_mask[:, _cur:(_cur + H_ * W_)].view(N_, H_, W_, 1)
             valid_H = torch.sum(~mask_flatten_[:, :, 0, 0], 1)
             valid_W = torch.sum(~mask_flatten_[:, 0, :, 0], 1)
@@ -115,6 +145,14 @@ class DeformableTransformer(nn.Module):
         return output_memory, output_proposals
 
     def get_valid_ratio(self, mask):
+        """Get the ratio of the image size which is actually useful data (ie. ratio of size of original to size of padded)
+
+        Args:
+            mask (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """
         _, H, W = mask.shape
         valid_H = torch.sum(~mask[:, :, 0], 1)
         valid_W = torch.sum(~mask[:, 0, :], 1)
@@ -124,7 +162,8 @@ class DeformableTransformer(nn.Module):
         return valid_ratio
 
     def forward(self, srcs, masks, pos_embeds, query_embed=None):
-        assert self.two_stage or query_embed is not None
+        
+        assert self.two_stage or query_embed is not None # for one stage, we have object query embeddings
 
         # prepare input for encoder
         src_flatten = []
@@ -132,28 +171,29 @@ class DeformableTransformer(nn.Module):
         lvl_pos_embed_flatten = []
         spatial_shapes = []
         for lvl, (src, mask, pos_embed) in enumerate(zip(srcs, masks, pos_embeds)):
-            bs, c, h, w = src.shape
+            bs, c, h, w = src.shape # batch: batchsize (num of imgs), channels=3, h and w for largest image
             spatial_shape = (h, w)
             spatial_shapes.append(spatial_shape)
             src = src.flatten(2).transpose(1, 2)
             mask = mask.flatten(1)
             pos_embed = pos_embed.flatten(2).transpose(1, 2)
-            lvl_pos_embed = pos_embed + self.level_embed[lvl].view(1, 1, -1)
+            lvl_pos_embed = pos_embed + self.level_embed[lvl].view(1, 1, -1) # position and level embed
             lvl_pos_embed_flatten.append(lvl_pos_embed)
             src_flatten.append(src)
             mask_flatten.append(mask)
-        src_flatten = torch.cat(src_flatten, 1)
-        mask_flatten = torch.cat(mask_flatten, 1)
-        lvl_pos_embed_flatten = torch.cat(lvl_pos_embed_flatten, 1)
-        spatial_shapes = torch.as_tensor(spatial_shapes, dtype=torch.long, device=src_flatten.device)
-        level_start_index = torch.cat((spatial_shapes.new_zeros((1, )), spatial_shapes.prod(1).cumsum(0)[:-1]))
+            
+        src_flatten = torch.cat(src_flatten, 1) # concat src_flatten (a list of feature maps) into tensor
+        mask_flatten = torch.cat(mask_flatten, 1) # concat mask_flatten (a list of masks) into tensor
+        lvl_pos_embed_flatten = torch.cat(lvl_pos_embed_flatten, 1) # flatten the embeddings
+        spatial_shapes = torch.as_tensor(spatial_shapes, dtype=torch.long, device=src_flatten.device) # convert list of dimension tuples to a tensor
+        level_start_index = torch.cat((spatial_shapes.new_zeros((1, )), spatial_shapes.prod(1).cumsum(0)[:-1])) # to index where the levels are of the feature maps
         valid_ratios = torch.stack([self.get_valid_ratio(m) for m in masks], 1)
 
         # encoder
         memory = self.encoder(src_flatten, spatial_shapes, level_start_index, valid_ratios, lvl_pos_embed_flatten, mask_flatten)
 
         # prepare input for decoder
-        bs, _, c = memory.shape
+        bs, _, c = memory.shape # batchsize, source, channel?
         if self.two_stage:
             output_memory, output_proposals = self.gen_encoder_output_proposals(memory, mask_flatten, spatial_shapes)
 
@@ -178,7 +218,7 @@ class DeformableTransformer(nn.Module):
 
         # decoder
         hs, inter_references = self.decoder(tgt, reference_points, memory,
-                                            spatial_shapes, level_start_index, valid_ratios, query_embed, mask_flatten)
+                                            spatial_shapes, level_start_index, valid_ratios, query_embed, mask_flatten) # target (feature vectors), reference points
 
         inter_references_out = inter_references
         if self.two_stage:
@@ -208,6 +248,15 @@ class DeformableTransformerEncoderLayer(nn.Module):
 
     @staticmethod
     def with_pos_embed(tensor, pos):
+        """For adding the relevant positional encoding to the tensor
+
+        Args:
+            tensor (_type_): _description_
+            pos (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """
         return tensor if pos is None else tensor + pos
     
 
@@ -216,7 +265,7 @@ class DeformableTransformerEncoderLayer(nn.Module):
     def forward_ffn(self, src):
         src2 = self.linear2(self.dropout2(self.activation(self.linear1(src))))
         src = src + self.dropout3(src2)
-        src = self.norm2(src)
+        src = self.norm2(src) # add and norm
         return src
 
     def forward(self, src, pos, reference_points, spatial_shapes, level_start_index, padding_mask=None):
@@ -241,6 +290,16 @@ class DeformableTransformerEncoder(nn.Module):
 
     @staticmethod
     def get_reference_points(spatial_shapes, valid_ratios, device):
+        """The reference point is the initial guess of the box center
+
+        Args:
+            spatial_shapes (_type_): _description_
+            valid_ratios (_type_): _description_
+            device (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """
         reference_points_list = []
         for lvl, (H_, W_) in enumerate(spatial_shapes):
 
@@ -250,13 +309,15 @@ class DeformableTransformerEncoder(nn.Module):
             ref_x = ref_x.reshape(-1)[None] / (valid_ratios[:, None, lvl, 0] * W_)
             ref = torch.stack((ref_x, ref_y), -1)
             reference_points_list.append(ref)
-        reference_points = torch.cat(reference_points_list, 1)
+        reference_points = torch.cat(reference_points_list, 1) # concatenate the list into a tensor
         reference_points = reference_points[:, :, None] * valid_ratios[:, None]
         return reference_points
 
     def forward(self, src, spatial_shapes, level_start_index, valid_ratios, pos=None, padding_mask=None):
         output = src
         reference_points = self.get_reference_points(spatial_shapes, valid_ratios, device=src.device)
+        
+        # send the src input through the layers (the N=6 encoder layer copies)
         for _, layer in enumerate(self.layers):
             output = layer(output, pos, reference_points, spatial_shapes, level_start_index, padding_mask)
 
@@ -277,7 +338,7 @@ class DeformableTransformerDecoderLayer(nn.Module):
         self.norm1 = nn.LayerNorm(d_model)
 
         # self attention
-        self.self_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout)
+        self.self_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout) # non-deformable, since conv feature maps are key elements
         self.dropout2 = nn.Dropout(dropout)
         self.norm2 = nn.LayerNorm(d_model)
 
@@ -348,6 +409,7 @@ class DeformableTransformerDecoder(nn.Module):
             output = layer(output, query_pos, reference_points_input, src, src_spatial_shapes, src_level_start_index, src_padding_mask)
 
             # hack implementation for iterative bounding box refinement
+            # See DefDETR A.4
             if self.bbox_embed is not None:
                 tmp = self.bbox_embed[lid](output)
                 if reference_points.shape[-1] == 4:

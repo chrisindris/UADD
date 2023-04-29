@@ -33,15 +33,15 @@ class MSDeformAttn(nn.Module):
     def __init__(self, d_model=256, n_levels=4, n_heads=8, n_points=4):
         """
         Multi-Scale Deformable Attention Module
-        :param d_model      hidden dimension
-        :param n_levels     number of feature levels
-        :param n_heads      number of attention heads
-        :param n_points     number of sampling points per attention head per feature level
+        :param d_model      hidden dimension (indris: =C in paper)
+        :param n_levels     number of feature levels (indris: =L in paper; how many output feature maps to use)
+        :param n_heads      number of attention heads (indris: =M in paper)
+        :param n_points     number of sampling points per attention head per feature level (indris: =K in paper; how many points around the reference point to add)
         """
         super().__init__()
         if d_model % n_heads != 0:
             raise ValueError('d_model must be divisible by n_heads, but got {} and {}'.format(d_model, n_heads))
-        _d_per_head = d_model // n_heads
+        _d_per_head = d_model // n_heads # C_v in paper
         # you'd better set _d_per_head to a power of 2 which is more efficient in our CUDA implementation
         if not _is_power_of_2(_d_per_head):
             warnings.warn("You'd better set d_model in MSDeformAttn to make the dimension of each attention head a power of 2 "
@@ -54,22 +54,29 @@ class MSDeformAttn(nn.Module):
         self.n_heads = n_heads
         self.n_points = n_points
 
-        self.sampling_offsets = nn.Linear(d_model, n_heads * n_levels * n_points * 2)
-        self.attention_weights = nn.Linear(d_model, n_heads * n_levels * n_points)
+        # from the query feature (size dHW)
+        self.sampling_offsets = nn.Linear(d_model, n_heads * n_levels * n_points * 2) # 2MK channels for sampling offsets per level
+        self.attention_weights = nn.Linear(d_model, n_heads * n_levels * n_points) # MK channels for attention weights per level
         self.value_proj = nn.Linear(d_model, d_model)
-        self.output_proj = nn.Linear(d_model, d_model)
+        self.output_proj = nn.Linear(d_model, d_model) # for aggregating the different heads' output
 
         self._reset_parameters()
 
     def _reset_parameters(self):
         constant_(self.sampling_offsets.weight.data, 0.)
+        
         thetas = torch.arange(self.n_heads, dtype=torch.float32) * (2.0 * math.pi / self.n_heads)
         grid_init = torch.stack([thetas.cos(), thetas.sin()], -1)
+        
+        # .view() part: for each head, we have the cos term and sin term (2 values)
+        # .repeat() part: repeat previous for each feature map level and deform attn offset point
         grid_init = (grid_init / grid_init.abs().max(-1, keepdim=True)[0]).view(self.n_heads, 1, 1, 2).repeat(1, self.n_levels, self.n_points, 1)
         for i in range(self.n_points):
             grid_init[:, :, i, :] *= i + 1
         with torch.no_grad():
             self.sampling_offsets.bias = nn.Parameter(grid_init.view(-1))
+            
+        # reset the weight matrices
         constant_(self.attention_weights.weight.data, 0.)
         constant_(self.attention_weights.bias.data, 0.)
         xavier_uniform_(self.value_proj.weight.data)
@@ -97,9 +104,12 @@ class MSDeformAttn(nn.Module):
         if input_padding_mask is not None:
             value = value.masked_fill(input_padding_mask[..., None], float(0))
         value = value.view(N, Len_in, self.n_heads, self.d_model // self.n_heads)
+        
         sampling_offsets = self.sampling_offsets(query).view(N, Len_q, self.n_heads, self.n_levels, self.n_points, 2)
+        
         attention_weights = self.attention_weights(query).view(N, Len_q, self.n_heads, self.n_levels * self.n_points)
         attention_weights = F.softmax(attention_weights, -1).view(N, Len_q, self.n_heads, self.n_levels, self.n_points)
+        
         # N, Len_q, n_heads, n_levels, n_points, 2
         if reference_points.shape[-1] == 2:
             offset_normalizer = torch.stack([input_spatial_shapes[..., 1], input_spatial_shapes[..., 0]], -1)

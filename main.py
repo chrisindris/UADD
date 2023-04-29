@@ -86,6 +86,7 @@ def get_args_parser():
     parser.add_argument('--enc_n_points', default=4, type=int)
 
     # * Segmentation
+    # would false by default be simpler?
     parser.add_argument('--masks', action='store_true',
                         help="Train segmentation head if the flag is provided")
 

@@ -308,6 +308,14 @@ def collate_fn(batch):
 
 
 def _max_by_axis(the_list):
+    """Return a list representing the maximum in each index
+
+    Args:
+        the_list (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
     # type: (List[List[int]]) -> List[int]
     maxes = the_list[0]
     for sublist in the_list[1:]:
@@ -317,20 +325,31 @@ def _max_by_axis(the_list):
 
 
 def nested_tensor_from_tensor_list(tensor_list: List[Tensor]):
+    """Convert a list of tensors (ie. a batch of image tensors) into a NestedTensor object
+
+    Args:
+        tensor_list (List[Tensor]): _description_
+
+    Raises:
+        ValueError: _description_
+
+    Returns:
+        _type_: _description_
+    """
     # TODO make this more general
-    if tensor_list[0].ndim == 3:
+    if tensor_list[0].ndim == 3: # ensure that a particular tensor is 3D (color img)
         # TODO make it support different-sized images
-        max_size = _max_by_axis([list(img.shape) for img in tensor_list])
+        max_size = _max_by_axis([list(img.shape) for img in tensor_list]) # A list of the largest size in each dimension
         # min_size = tuple(min(s) for s in zip(*[img.shape for img in tensor_list]))
-        batch_shape = [len(tensor_list)] + max_size
-        b, c, h, w = batch_shape
+        batch_shape = [len(tensor_list)] + max_size # the batch size b = len(tensor_list)
+        b, c, h, w = batch_shape # the shape of the batch; b images, c,h,w are the largest dimensions
         dtype = tensor_list[0].dtype
         device = tensor_list[0].device
-        tensor = torch.zeros(batch_shape, dtype=dtype, device=device)
-        mask = torch.ones((b, h, w), dtype=torch.bool, device=device)
-        for img, pad_img, m in zip(tensor_list, tensor, mask):
-            pad_img[: img.shape[0], : img.shape[1], : img.shape[2]].copy_(img)
-            m[: img.shape[1], :img.shape[2]] = False
+        tensor = torch.zeros(batch_shape, dtype=dtype, device=device) # a zero tensor in the shape of the batch.
+        mask = torch.ones((b, h, w), dtype=torch.bool, device=device) # a ones tensor in the shape of image (mask, for multiplying by an image to mask parts of it).
+        for img, pad_img, m in zip(tensor_list, tensor, mask): 
+            pad_img[: img.shape[0], : img.shape[1], : img.shape[2]].copy_(img) # create a padded image by filling part of the zero tensor with the image content.
+            m[: img.shape[1], :img.shape[2]] = False # set the parts that overlap the image to 0
     else:
         raise ValueError('not supported')
     return NestedTensor(tensor, mask)
@@ -338,6 +357,12 @@ def nested_tensor_from_tensor_list(tensor_list: List[Tensor]):
 
 class NestedTensor(object):
     def __init__(self, tensors, mask: Optional[Tensor]):
+        """Data structure representing a list of tensors and their masks
+
+        Args:
+            tensors (_type_): _description_
+            mask (Optional[Tensor]): _description_
+        """
         self.tensors = tensors
         self.mask = mask
 

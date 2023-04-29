@@ -23,6 +23,17 @@ class PositionEmbeddingSine(nn.Module):
     used by the Attention is all you need paper, generalized to work on images.
     """
     def __init__(self, num_pos_feats=64, temperature=10000, normalize=False, scale=None):
+        """Set the values we need for the position embedding
+
+        Args:
+            num_pos_feats (int, optional): _description_. Defaults to 64.
+            temperature (int, optional): _description_. Defaults to 10000.
+            normalize (bool, optional): _description_. Defaults to False.
+            scale (_type_, optional): _description_. Defaults to None.
+
+        Raises:
+            ValueError: _description_
+        """
         super().__init__()
         self.num_pos_feats = num_pos_feats
         self.temperature = temperature
@@ -34,6 +45,14 @@ class PositionEmbeddingSine(nn.Module):
         self.scale = scale
 
     def forward(self, tensor_list: NestedTensor):
+        """Computes the positional encoding for the input vector.
+
+        Args:
+            tensor_list (NestedTensor): _description_
+
+        Returns:
+            _type_: _description_
+        """
         x = tensor_list.tensors
         mask = tensor_list.mask
         assert mask is not None
