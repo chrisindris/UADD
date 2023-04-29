@@ -150,8 +150,8 @@ def main():
     cudnn.benchmark = True
 
     # Data loading code
-    traindir = os.path.join(args.data, 'coco/train2017')
-    valdir = os.path.join(args.data, 'coco/val2017')
+    traindir = os.path.join(args.data, 'coco')
+    valdir = os.path.join(args.data, 'coco')
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                      std=[0.229, 0.224, 0.225])
 
