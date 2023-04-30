@@ -82,7 +82,9 @@ class ECABottleneck(nn.Module):
 
         out = self.conv3(out)
         out = self.bn3(out)
-        out = self.eca(out)
+        
+        out, W_ECA = self.eca(out) # forward step 2: from eca_module
+        print(W_ECA)
 
         if self.downsample is not None:
             residual = self.downsample(x)
@@ -112,10 +114,10 @@ class ResNet(nn.Module):
         self.bn1 = nn.BatchNorm2d(64)
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-        self.layer1 = self._make_layer(block, 64, layers[0], int(k_size[0]))
-        self.layer2 = self._make_layer(block, 128, layers[1], int(k_size[1]), stride=2)
-        self.layer3 = self._make_layer(block, 256, layers[2], int(k_size[2]), stride=2)
-        self.layer4 = self._make_layer(block, 512, layers[3], int(k_size[3]), stride=2)
+        self.layer1 = self._make_layer(block, 64, layers[0], int(k_size[0])) # uses eca
+        self.layer2 = self._make_layer(block, 128, layers[1], int(k_size[1]), stride=2) # uses eca
+        self.layer3 = self._make_layer(block, 256, layers[2], int(k_size[2]), stride=2) # uses eca
+        self.layer4 = self._make_layer(block, 512, layers[3], int(k_size[3]), stride=2) # uses eca
         self.avgpool = nn.AvgPool2d(7, stride=1)
         self.fc = nn.Linear(512 * block.expansion, num_classes)
 
@@ -174,6 +176,7 @@ class ResNet(nn.Module):
         x = self.relu(x)
         x = self.maxpool(x)
 
+        # each one of these is from forward step 3: Bottleneck
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)

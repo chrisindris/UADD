@@ -94,13 +94,15 @@ class BackboneBase(nn.Module):
         self.body = IntermediateLayerGetter(backbone, return_layers=return_layers)
 
     def forward(self, tensor_list: NestedTensor):
-        xs = self.body(tensor_list.tensors) # pass images through backbone to get feature maps
+        xs = self.body(tensor_list.tensors) # pass images through backbone to get feature maps # forward step 4: from eca_resnet50
+        
         out: Dict[str, NestedTensor] = {}
         for name, x in xs.items():
             m = tensor_list.mask
             assert m is not None
             mask = F.interpolate(m[None].float(), size=x.shape[-2:]).to(torch.bool)[0] # ensure the mask matches the size of the feature maps
             out[name] = NestedTensor(x, mask) # the feature map and the mask
+            
         return out
 
 
@@ -136,7 +138,7 @@ class Joiner(nn.Sequential):
         self.num_channels = backbone.num_channels
 
     def forward(self, tensor_list: NestedTensor):
-        xs = self[0](tensor_list) # send the input (images?) through the backbone.
+        xs = self[0](tensor_list) # send the input (images?) through the backbone. # forward Step 5: from BackboneBase
         out: List[NestedTensor] = [] # a list of nested tensors.
         pos = []
         for name, x in sorted(xs.items()): # items() means that the dict structure of name, x becomes list of tuples
@@ -146,7 +148,7 @@ class Joiner(nn.Sequential):
         for x in out:
             pos.append(self[1](x).to(x.tensors.dtype)) # the associated position
 
-        return out, pos # the backbone features and the encoding
+        return out, pos # the backbone features and the encoding; two things are being forwarded
 
 
 def build_backbone(args):

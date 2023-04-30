@@ -109,7 +109,7 @@ class MSDeformAttn(nn.Module):
         
         # here are the attention weights; we want to add the ECA attention to the levels dimension
         
-        attention_weights = self.attention_weights(query).view(N, Len_q, self.n_heads, self.n_levels * self.n_points)
+        attention_weights = self.attention_weights(query).view(N, Len_q, self.n_heads, self.n_levels * self.n_points) # forward step Z
         attention_weights = F.softmax(attention_weights, -1).view(N, Len_q, self.n_heads, self.n_levels, self.n_points)
         
         # N, Len_q, n_heads, n_levels, n_points, 2
