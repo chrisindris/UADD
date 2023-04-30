@@ -213,11 +213,11 @@ def eca_resnet34(k_size=[3, 3, 3, 3], num_classes=1_000, pretrained=False):
     return model
 
 
-def eca_resnet50(k_size=[3, 3, 3, 3], num_classes=1000, pretrained=False):
+def eca_resnet50(k_size=[3,3,3,3], num_classes=1000, pretrained=False):
     """Constructs a ResNet-50 model.
 
     Args:
-        k_size: Adaptive selection of kernel size
+        k_size: Adaptive selection of kernel size (kernel size formula says 3,5,5,5 for adaptive; 5,5,5,5 for simplicity)
         num_classes:The classes of classification
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """

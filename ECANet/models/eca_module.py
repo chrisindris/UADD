@@ -7,15 +7,28 @@ class eca_layer(nn.Module):
 
     Args:
         channel: Number of channels of the input feature map
-        k_size: Adaptive selection of kernel size
+        k_size: Adaptive selection of kernel size (how many channels to use)
     """
     def __init__(self, channel, k_size=3):
         super(eca_layer, self).__init__()
-        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.avg_pool = nn.AdaptiveAvgPool2d(1) # adaptive avg pool; no dimensionality reduction
         self.conv = nn.Conv1d(1, 1, kernel_size=k_size, padding=(k_size - 1) // 2, bias=False) 
+        
+        # shape of the conv1d weight
+        print("CONV1D WEIGHT SHAPE")
+        print(self.conv.state_dict())
+        
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
+        """Multiply the CxHxW feature map x by the Cx1x1 channel attention (for the purpose of weighing the channels)
+
+        Args:
+            x (tensor): feature map
+
+        Returns:
+            tensor: feature map, with each channel scaled by that channel's attention
+        """
         # feature descriptor on the global spatial information
         y = self.avg_pool(x)
 
@@ -25,5 +38,5 @@ class eca_layer(nn.Module):
         # Multi-scale information fusion
         y = self.sigmoid(y)
 
-        return x * y.expand_as(x)
+        return x * y.expand_as(x) # ensure that the dimensions match up
         
