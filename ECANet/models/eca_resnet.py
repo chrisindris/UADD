@@ -47,6 +47,15 @@ class ECABottleneck(nn.Module):
     expansion = 4
 
     def __init__(self, inplanes, planes, stride=1, downsample=None, k_size=3):
+        """Class for ECABottleneck network (the block within each conv layer)
+
+        Args:
+            inplanes (int): the number of input channels of the input feature maps (tensor)
+            planes (int): the number of filters / output channels
+            stride (int, optional): conv stride. Defaults to 1.
+            downsample (Any, optional): used like a boolean to select downsampling. Defaults to None.
+            k_size (int, optional): kernel size. Defaults to 3.
+        """
         super(ECABottleneck, self).__init__()
         self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, bias=False)
         self.bn1 = nn.BatchNorm2d(planes)
@@ -86,7 +95,16 @@ class ECABottleneck(nn.Module):
 
 class ResNet(nn.Module):
 
+    # SHOULD WE USE 91 CLASSES (COCO)?
     def __init__(self, block, layers, num_classes=1000, k_size=[3, 3, 3, 3]):
+        """Class for the ResNet architecture
+
+        Args:
+            block (ECABottleneck): the efficient channel attention bottleneck
+            layers (int 4-list): # of times to repeat conv 2,3,4,5
+            num_classes (int, optional): number of classes. Defaults to 1000.
+            k_size (list, optional): _description_. Defaults to [3, 3, 3, 3].
+        """
         self.inplanes = 64
         super(ResNet, self).__init__()
         self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
@@ -101,6 +119,7 @@ class ResNet(nn.Module):
         self.avgpool = nn.AvgPool2d(7, stride=1)
         self.fc = nn.Linear(512 * block.expansion, num_classes)
 
+        # set the initial weights
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
@@ -110,6 +129,18 @@ class ResNet(nn.Module):
                 m.bias.data.zero_()
 
     def _make_layer(self, block, planes, blocks, k_size, stride=1):
+        """Make one of the conv layers in resnet (a "layer" is the chunk that the residual connection skips)
+
+        Args:
+            block (ECABottleneck): the block of conv layers (that the residual jumps over)
+            planes (int): the number of filters / output channels
+            blocks (int): how many times to repeat the block for this particular conv layer (conv2, conv3...)
+            k_size (int): kernel size.
+            stride (int, optional): conv stride. Defaults to 1.
+
+        Returns:
+            _type_: _description_
+        """
         downsample = None
         if stride != 1 or self.inplanes != planes * block.expansion:
             downsample = nn.Sequential(
@@ -121,13 +152,24 @@ class ResNet(nn.Module):
         layers = []
         layers.append(block(self.inplanes, planes, stride, downsample, k_size))
         self.inplanes = planes * block.expansion
+        
+        # within a particular layer, the residual is repeated
         for i in range(1, blocks):
             layers.append(block(self.inplanes, planes, k_size=k_size))
 
         return nn.Sequential(*layers)
 
     def forward(self, x):
-        x = self.conv1(x)
+        """Send the feature map through the ResNet.
+
+        Args:
+            x (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """
+        
+        x = self.conv1(x) # conv 1
         x = self.bn1(x)
         x = self.relu(x)
         x = self.maxpool(x)
@@ -137,9 +179,10 @@ class ResNet(nn.Module):
         x = self.layer3(x)
         x = self.layer4(x)
 
-        x = self.avgpool(x)
+        x = self.avgpool(x) # average pooling
+        
         x = x.view(x.size(0), -1)
-        x = self.fc(x)
+        x = self.fc(x) # fully connected
 
         return x
 
@@ -179,7 +222,7 @@ def eca_resnet50(k_size=[3, 3, 3, 3], num_classes=1000, pretrained=False):
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
     print("Constructing eca_resnet50......")
-    model = ResNet(ECABottleneck, [3, 4, 6, 3], num_classes=num_classes, k_size=k_size)
+    model = ResNet(ECABottleneck, [3, 4, 6, 3], num_classes=num_classes, k_size=k_size) # 3,4,6,3 specifies how many times to repeat conv2,3,4,5 to get 50-layer ResNet
     model.avgpool = nn.AdaptiveAvgPool2d(1)
     return model
 

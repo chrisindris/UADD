@@ -39,7 +39,7 @@ def get_args_parser():
     parser.add_argument('--lr_linear_proj_mult', default=0.1, type=float)
     parser.add_argument('--batch_size', default=2, type=int)
     parser.add_argument('--weight_decay', default=1e-4, type=float) # weight decayed by factor of 0.1
-    parser.add_argument('--epochs', default=1, type=int) # num of epochs to train
+    parser.add_argument('--epochs', default=15, type=int) # num of epochs to train
     parser.add_argument('--lr_drop', default=40, type=int) # weight is decayed at 40th epoch
     parser.add_argument('--lr_drop_epochs', default=None, type=int, nargs='+') # unused
     parser.add_argument('--clip_max_norm', default=0.1, type=float,

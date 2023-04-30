@@ -114,7 +114,7 @@ class Backbone(BackboneBase):
         norm_layer = FrozenBatchNorm2d
         
         if eca:
-            backbone = eca_resnet50()
+            backbone = eca_resnet50(num_classes=91)
         else: 
             backbone = getattr(torchvision.models, name)(
                 replace_stride_with_dilation=[False, False, dilation],
