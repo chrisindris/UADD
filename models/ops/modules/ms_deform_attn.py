@@ -107,6 +107,8 @@ class MSDeformAttn(nn.Module):
         
         sampling_offsets = self.sampling_offsets(query).view(N, Len_q, self.n_heads, self.n_levels, self.n_points, 2)
         
+        # here are the attention weights; we want to add the ECA attention to the levels dimension
+        
         attention_weights = self.attention_weights(query).view(N, Len_q, self.n_heads, self.n_levels * self.n_points)
         attention_weights = F.softmax(attention_weights, -1).view(N, Len_q, self.n_heads, self.n_levels, self.n_points)
         

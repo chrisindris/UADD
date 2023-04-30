@@ -16,9 +16,17 @@ class eca_layer(nn.Module):
         
         # shape of the conv1d weight
         print("CONV1D WEIGHT SHAPE")
-        print(self.conv.state_dict())
+        print(self.conv.state_dict()['weight'])
         
         self.sigmoid = nn.Sigmoid()
+        
+    def get_attention_weights(self):
+        """getter function to show the attention weights from a particular eca_layer instance.
+
+        Returns:
+            tensor: _description_
+        """
+        return self.conv.state_dict()
 
     def forward(self, x):
         """Multiply the CxHxW feature map x by the Cx1x1 channel attention (for the purpose of weighing the channels)
