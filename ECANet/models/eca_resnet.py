@@ -95,7 +95,7 @@ class ECABottleneck(nn.Module):
         out += residual
         out = self.relu(out)
 
-        return out, W_ECA
+        return out
 
 
 class ResNet(nn.Module):
@@ -180,10 +180,10 @@ class ResNet(nn.Module):
         x = self.maxpool(x)
 
         # each one of these is from forward step 3: Bottleneck
-        x, A = self.layer1(x)
-        x, A = self.layer2(x)
-        x, A = self.layer3(x)
-        x, A = self.layer4(x)
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
         #print(W_ECA)
 
         x = self.avgpool(x) # average pooling
