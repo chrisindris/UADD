@@ -104,7 +104,44 @@ class ECABottleneck(nn.Module):
         out += residual
         out = self.relu(out)
 
-        return out
+        return out, W_ECA
+
+
+class ECAResNetLayer(nn.Module):
+    
+    def __init__(self, block, inplanes, planes, blocks, k_size, stride=1):
+        super(ECAResNetLayer, self).__init__()
+        self.block = block
+        self.inplanes = inplanes
+        self.planes = planes
+        self.blocks = blocks
+        self.k_size = k_size
+        self.stride = stride
+        
+        self.downsample = None
+        if self.stride != 1 or self.inplanes != self.planes * self.block.expansion:
+            self.downsample = nn.Sequential(
+                nn.Conv2d(self.inplanes, self.planes * self.block.expansion,
+                          kernel_size=1, stride=self.stride, bias=False),
+                nn.BatchNorm2d(planes * block.expansion),
+            )
+            
+        self.layers = []
+        self.layers.append(self.block(self.inplanes, self.planes, self.stride, self.downsample, self.k_size))
+        self.inplanes = self.planes * self.block.expansion
+        
+        # within a particular layer, the residual is repeated
+        for i in range(1, self.blocks):
+            self.layers.append(self.block(self.inplanes, self.planes, k_size=self.k_size))
+            
+        self.mdls = nn.ModuleList(self.layers)
+        
+    def forward(self, x, W_ECA=None):
+        for layer in self.mdls:
+            x, W_ECA = layer(x, W_ECA)
+        return x, W_ECA
+        
+        
 
 
 class ResNet(nn.Module):
@@ -126,10 +163,17 @@ class ResNet(nn.Module):
         self.bn1 = nn.BatchNorm2d(64)
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-        self.layer1 = self._make_layer(block, 64, layers[0], int(k_size[0])) # uses eca
-        self.layer2 = self._make_layer(block, 128, layers[1], int(k_size[1]), stride=2) # uses eca
-        self.layer3 = self._make_layer(block, 256, layers[2], int(k_size[2]), stride=2) # uses eca
-        self.layer4 = self._make_layer(block, 512, layers[3], int(k_size[3]), stride=2) # uses eca
+        
+        self.layer1 = ECAResNetLayer(block, self.inplanes, 64, layers[0], int(k_size[0]))
+        self.layer2 = ECAResNetLayer(block, self.inplanes, 128, layers[1], int(k_size[1]))
+        self.layer3 = ECAResNetLayer(block, self.inplanes, 256, layers[2], int(k_size[2]))
+        self.layer4 = ECAResNetLayer(block, self.inplanes, 512, layers[3], int(k_size[3]))
+        
+        # self.layer1 = self._make_layer(block, 64, layers[0], int(k_size[0])) # uses eca
+        # self.layer2 = self._make_layer(block, 128, layers[1], int(k_size[1]), stride=2) # uses eca
+        # self.layer3 = self._make_layer(block, 256, layers[2], int(k_size[2]), stride=2) # uses eca
+        # self.layer4 = self._make_layer(block, 512, layers[3], int(k_size[3]), stride=2) # uses eca
+        
         self.avgpool = nn.AvgPool2d(7, stride=1)
         self.fc = nn.Linear(512 * block.expansion, num_classes)
 
@@ -141,6 +185,11 @@ class ResNet(nn.Module):
             elif isinstance(m, nn.BatchNorm2d):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
+                
+        # print("RESNET MODULES")
+        # for m in self.modules():
+        #   if isinstance(m, ECABottleneck):
+        #     print(m)
 
     def _make_layer(self, block, planes, blocks, k_size, stride=1):
         """Make one of the conv layers in resnet (a "layer" is the chunk that the residual connection skips)
@@ -173,7 +222,7 @@ class ResNet(nn.Module):
 
         return nn.Sequential(*layers)
 
-    def forward(self, x):
+    def forward(self, x, W_ECA=None):
         """Send the feature map through the ResNet.
 
         Args:
@@ -189,10 +238,10 @@ class ResNet(nn.Module):
         x = self.maxpool(x)
 
         # each one of these is from forward step 3: Bottleneck
-        x = self.layer1(x)
-        x = self.layer2(x)
-        x = self.layer3(x)
-        x = self.layer4(x)
+        x, W_ECA = self.layer1(x, W_ECA)
+        x, W_ECA = self.layer2(x, W_ECA)
+        x, W_ECA = self.layer3(x, W_ECA)
+        x, W_ECA = self.layer4(x, W_ECA)
 
         x = self.avgpool(x) # average pooling
         
