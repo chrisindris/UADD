@@ -71,7 +71,7 @@ class ECABottleneck(nn.Module):
         
         self.sigmoid = nn.Sigmoid()
 
-    def forward(self, x, W_ECA_in=0):
+    def forward(self, x, W_ECA_in=None):
         residual = x
 
         out = self.conv1(x)
@@ -86,7 +86,11 @@ class ECABottleneck(nn.Module):
         out = self.bn3(out)
         
         out, W_ECA = self.eca(out) # forward step 2: from eca_module
-        W_ECA = self.sigmoid(W_ECA + W_ECA_in)
+        
+        if W_ECA_in is not None:
+            W_ECA = W_ECA = W_ECA_in
+        
+        W_ECA = self.sigmoid(W_ECA)
         #print(W_ECA)
 
         if self.downsample is not None:
