@@ -181,9 +181,9 @@ class ResNet(nn.Module):
 
         # each one of these is from forward step 3: Bottleneck
         x, W_ECA = self.layer1(x)
-        x, W_ECA = self.layer2(x, W_ECA)
-        x, W_ECA = self.layer3(x, W_ECA)
-        x, W_ECA = self.layer4(x, W_ECA)
+        x, W_ECA = self.layer2(x, W_ECA_in=W_ECA)
+        x, W_ECA = self.layer3(x, W_ECA_in=W_ECA)
+        x, W_ECA = self.layer4(x, W_ECA_in=W_ECA)
         print(W_ECA)
 
         x = self.avgpool(x) # average pooling
