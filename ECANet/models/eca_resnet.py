@@ -168,7 +168,7 @@ class ResNet(nn.Module):
 
         return nn.Sequential(*layers)
 
-    def forward(self, x):
+    def forward(self, x, W_ECA=None):
         """Send the feature map through the ResNet.
 
         Args:
@@ -184,10 +184,10 @@ class ResNet(nn.Module):
         x = self.maxpool(x)
 
         # each one of these is from forward step 3: Bottleneck
-        x, A = self.layer1(x)
-        x, A = self.layer2(x)
-        x, A = self.layer3(x)
-        x, A = self.layer4(x)
+        x, W_ECA = self.layer1(x, W_ECA)
+        x, W_ECA = self.layer2(x, W_ECA)
+        x, W_ECA = self.layer3(x, W_ECA)
+        x, W_ECA = self.layer4(x, W_ECA)
         #print(W_ECA)
 
         x = self.avgpool(x) # average pooling
@@ -195,7 +195,7 @@ class ResNet(nn.Module):
         x = x.view(x.size(0), -1)
         x = self.fc(x) # fully connected
 
-        return x
+        return x, W_ECA
 
 
 def eca_resnet18(k_size=[3, 3, 3, 3], num_classes=1_000, pretrained=False):
