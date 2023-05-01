@@ -69,7 +69,11 @@ class ECABottleneck(nn.Module):
         self.downsample = downsample
         self.stride = stride
         
+        self.W_ECA = None
         self.sigmoid = nn.Sigmoid()
+        
+    def get_W_ECA(self):
+        return self.W_ECA
 
     def forward(self, x, W_ECA_in=None):
         residual = x
@@ -91,6 +95,7 @@ class ECABottleneck(nn.Module):
             W_ECA = W_ECA = W_ECA_in
         
         W_ECA = self.sigmoid(W_ECA)
+        self.W_ECA = W_ECA
         #print(W_ECA)
 
         if self.downsample is not None:
@@ -188,7 +193,6 @@ class ResNet(nn.Module):
         x = self.layer2(x)
         x = self.layer3(x)
         x = self.layer4(x)
-        #print(W_ECA)
 
         x = self.avgpool(x) # average pooling
         
