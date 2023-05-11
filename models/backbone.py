@@ -91,9 +91,11 @@ class BackboneBase(nn.Module):
             return_layers = {'layer4': "0"}
             self.strides = [32]
             self.num_channels = [2048]
+            
         self.body = IntermediateLayerGetter(backbone, return_layers=return_layers)
 
     def forward(self, tensor_list: NestedTensor):
+
         xs = self.body(tensor_list.tensors) # pass images through backbone to get feature maps # forward step 4: from eca_resnet50
         
         out: Dict[str, NestedTensor] = {}
@@ -116,7 +118,7 @@ class Backbone(BackboneBase):
         norm_layer = FrozenBatchNorm2d
         
         if eca:
-            backbone = eca_resnet50(num_classes=91)
+            backbone = eca_resnet50(num_classes=91) # use the ECA model
         else: 
             backbone = getattr(torchvision.models, name)(
                 replace_stride_with_dilation=[False, False, dilation],
