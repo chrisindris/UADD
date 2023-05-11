@@ -13,18 +13,24 @@ class eca_layer(nn.Module):
         super(eca_layer, self).__init__()
         self.avg_pool = nn.AdaptiveAvgPool2d(1) # adaptive avg pool; no dimensionality reduction
         self.conv = nn.Conv1d(1, 1, kernel_size=k_size, padding=(k_size - 1) // 2, bias=False) 
+        
+        # shape of the conv1d weight
+        print("CONV1D WEIGHT SHAPE")
+        print(self.conv.state_dict()['weight'])
+        
         self.sigmoid = nn.Sigmoid()
         
     def get_attention_weights(self):
         """getter function to show the attention weights from a particular eca_layer instance.
-        
-        shape: torch.Size([1,1,3=k_size])
-        16 instances are created, due to sum([3,4,6,3])=16
 
         Returns:
+<<<<<<< HEAD
             tensor: the attention weight for this particular instance. Shape is [1,1,3].
+=======
+            tensor: _description_
+>>>>>>> parent of dad512f (residual: fwd step 2)
         """
-        return self.conv.state_dict()['weight']
+        return self.conv.state_dict()
 
     def forward(self, x):
         """Multiply the CxHxW feature map x by the Cx1x1 channel attention (for the purpose of weighing the channels)
@@ -44,5 +50,9 @@ class eca_layer(nn.Module):
         # Multi-scale information fusion
         y = self.sigmoid(y)
 
+<<<<<<< HEAD
         return x * y.expand_as(x) #, self.get_attention_weights() # ensure that the dimensions match up
+=======
+        return x * y.expand_as(x) # ensure that the dimensions match up
+>>>>>>> parent of dad512f (residual: fwd step 2)
         
