@@ -44,5 +44,5 @@ class eca_layer(nn.Module):
         # Multi-scale information fusion
         y = self.sigmoid(y)
 
-        return x * y.expand_as(x), self.get_attention_weights() # ensure that the dimensions match up
+        return x * y.expand_as(x) #, self.get_attention_weights() # ensure that the dimensions match up
         

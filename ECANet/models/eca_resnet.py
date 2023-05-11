@@ -75,7 +75,7 @@ class ECABottleneck(nn.Module):
     def get_W_ECA(self):
         return self.W_ECA
 
-    def forward(self, x, W_ECA_in=None):
+    def forward(self, x):
         residual = x
 
         out = self.conv1(x)
@@ -90,13 +90,13 @@ class ECABottleneck(nn.Module):
         out = self.bn3(out)
 
         print(type(out))
-        out, W_ECA = self.eca(out) # forward step 2: from eca_module
+        out = self.eca(out) # forward step 2: from eca_module
         
-        if W_ECA_in is not None:
-            W_ECA = W_ECA = W_ECA_in
+        #if W_ECA_in is not None:
+        #    W_ECA = W_ECA = W_ECA_in
         
-        W_ECA = self.sigmoid(W_ECA)
-        self.W_ECA = W_ECA
+        #W_ECA = self.sigmoid(W_ECA)
+        #self.W_ECA = W_ECA
         #print(W_ECA)
 
         if self.downsample is not None:
@@ -105,7 +105,7 @@ class ECABottleneck(nn.Module):
         out += residual
         out = self.relu(out)
 
-        return out, W_ECA
+        return out
 
 
 class ECAResNetLayer(nn.Module):
@@ -137,10 +137,10 @@ class ECAResNetLayer(nn.Module):
             
         self.mdls = nn.ModuleList(self.layers)
         
-    def forward(self, x, W_ECA=None):
+    def forward(self, x):
         for layer in self.mdls:
-            x, W_ECA = layer(x, W_ECA)
-        return x, W_ECA
+            x = layer(x)
+        return x
         
         
 
@@ -223,7 +223,7 @@ class ResNet(nn.Module):
 
         return nn.Sequential(*layers)
 
-    def forward(self, x, W_ECA=None):
+    def forward(self, x):
         """Send the feature map through the ResNet.
 
         Args:
@@ -239,10 +239,15 @@ class ResNet(nn.Module):
         x = self.maxpool(x)
 
         # each one of these is from forward step 3: Bottleneck
-        x, W_ECA = self.layer1(x, W_ECA)
-        x, W_ECA = self.layer2(x, W_ECA)
-        x, W_ECA = self.layer3(x, W_ECA)
-        x, W_ECA = self.layer4(x, W_ECA)
+        # x, W_ECA = self.layer1(x, W_ECA)
+        # x, W_ECA = self.layer2(x, W_ECA)
+        # x, W_ECA = self.layer3(x, W_ECA)
+        # x, W_ECA = self.layer4(x, W_ECA)
+
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
 
         x = self.avgpool(x) # average pooling
         
