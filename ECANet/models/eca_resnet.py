@@ -89,7 +89,8 @@ class ECABottleneck(nn.Module):
         out = self.conv3(out)
         out = self.bn3(out)
 
-        print(type(out)) # let's see what is being printed
+        #print(type(out)) # tensor; lots of them
+        print(out.size())
         out = self.eca(out) # forward step 2: from eca_module
         
         #if W_ECA_in is not None:

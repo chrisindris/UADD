@@ -171,7 +171,8 @@ def main(args):
     dataset_train = build_dataset(image_set='train', args=args)
     dataset_val = build_dataset(image_set='val', args=args)
 
-    # Specifies a sampler (sequence for data loading) 
+    # Specifies a sampler (sequence for data loading)
+    # TODO: Look into the details of these samplers 
     if args.distributed:
         if args.cache_mode:
             sampler_train = samplers.NodeDistributedSampler(dataset_train)
