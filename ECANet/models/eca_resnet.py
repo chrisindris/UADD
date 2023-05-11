@@ -89,7 +89,7 @@ class ECABottleneck(nn.Module):
         out = self.conv3(out)
         out = self.bn3(out)
 
-        print(type(out))
+        print(type(out)) # let's see what is being printed
         out = self.eca(out) # forward step 2: from eca_module
         
         #if W_ECA_in is not None:

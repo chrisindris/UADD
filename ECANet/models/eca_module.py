@@ -22,7 +22,7 @@ class eca_layer(nn.Module):
         16 instances are created, due to sum([3,4,6,3])=16
 
         Returns:
-            tensor: the attention weight for this particular instance. Shape is [1,1,3]
+            tensor: the attention weight for this particular instance. Shape is [1,1,3].
         """
         return self.conv.state_dict()['weight']
 
