@@ -95,13 +95,7 @@ class BackboneBase(nn.Module):
         self.body = IntermediateLayerGetter(backbone, return_layers=return_layers)
 
     def forward(self, tensor_list: NestedTensor):
-<<<<<<< HEAD
-
-        xs = self.body(tensor_list.tensors) # pass images through backbone to get feature maps # forward step 4: from eca_resnet50
-        
-=======
-        xs = self.body(tensor_list.tensors) # pass images through backbone to get feature maps
->>>>>>> parent of dad512f (residual: fwd step 2)
+        xs = self.body(tensor_list.tensors) # pass images through backbone to get feature maps # forward step 4: from eca_resnet50    
         out: Dict[str, NestedTensor] = {}
         for name, x in xs.items():
             m = tensor_list.mask
