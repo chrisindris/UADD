@@ -24,11 +24,7 @@ class eca_layer(nn.Module):
         """getter function to show the attention weights from a particular eca_layer instance.
 
         Returns:
-<<<<<<< HEAD
             tensor: the attention weight for this particular instance. Shape is [1,1,3].
-=======
-            tensor: _description_
->>>>>>> parent of dad512f (residual: fwd step 2)
         """
         return self.conv.state_dict()
 
@@ -50,9 +46,5 @@ class eca_layer(nn.Module):
         # Multi-scale information fusion
         y = self.sigmoid(y)
 
-<<<<<<< HEAD
         return x * y.expand_as(x) #, self.get_attention_weights() # ensure that the dimensions match up
-=======
-        return x * y.expand_as(x) # ensure that the dimensions match up
->>>>>>> parent of dad512f (residual: fwd step 2)
         
