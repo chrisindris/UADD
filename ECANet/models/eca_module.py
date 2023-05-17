@@ -21,6 +21,7 @@ class eca_layer(nn.Module):
         self.sigmoid = nn.Sigmoid()
         
     def get_attention_weights(self):
+        # TODO: this is actually get_k
         """getter function to show the attention weights from a particular eca_layer instance.
 
         Returns:
