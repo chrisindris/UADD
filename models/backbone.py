@@ -132,18 +132,19 @@ class Joiner(nn.Sequential):
     """ This sequentially joins the backbone with the positional embedding (which is expressed as a module)
     """
     def __init__(self, backbone, position_embedding):
-        super().__init__(backbone, position_embedding)
+        super().__init__(backbone, position_embedding) # we initialize as nn.Sequential with backbone first and position_embedding second
         self.strides = backbone.strides
         self.num_channels = backbone.num_channels
 
     def forward(self, tensor_list: NestedTensor):
-        xs = self[0](tensor_list) # send the input (images?) through the backbone.
+
         out: List[NestedTensor] = [] # a list of nested tensors.
-        pos = []
+        xs = self[0](tensor_list) # send the input (images?) through the backbone.
         for name, x in sorted(xs.items()): # items() means that the dict structure of name, x becomes list of tuples
             out.append(x) # output of backbone
 
-        # position encoding
+        # position encoding for the particular image
+        pos = []
         for x in out:
             pos.append(self[1](x).to(x.tensors.dtype)) # the associated position
 

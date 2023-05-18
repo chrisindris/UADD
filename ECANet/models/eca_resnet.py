@@ -89,8 +89,17 @@ class ECABottleneck(nn.Module):
         out = self.conv3(out)
         out = self.bn3(out)
 
-        #print(type(out)) # tensor; lots of them
-        print(out.size())
+        # print(type(out)) # tensor
+
+        # print(out.size()) =
+        """ 
+        For each image:
+            3x [2, 256, x, y]
+            4x [2, 512, x/2, y/2]
+            6x [2, 1024, x/4, y/4]
+            3x [2, 2048, x/8, y/8]
+        """ 
+
         out = self.eca(out) # forward step 2: from eca_module
         
         #if W_ECA_in is not None:

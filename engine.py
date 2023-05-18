@@ -42,6 +42,8 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
     # range(len(data_loader)): range() returns an iterable, and its length is 59143
     # It is 59143 because train2017 has 118286 images and 118286 / batch_size=2 = 59143
     for _ in metric_logger.log_every(range(len(data_loader)), print_freq, header): # output the logs
+
+        print("engine.py type(samples)= ", type(samples))
         outputs = model(samples)
         
         loss_dict = criterion(outputs, targets)
