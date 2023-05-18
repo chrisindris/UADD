@@ -362,11 +362,14 @@ def nested_tensor_from_tensor_list(tensor_list: List[Tensor]):
 
 class NestedTensor(object):
     def __init__(self, tensors, mask: Optional[Tensor]):
-        """Data structure representing a list of tensors and their masks
+        """Data structure representing a list (ie. the batch) of tensors and their masks
 
         Args:
-            tensors (_type_): _description_
-            mask (Optional[Tensor]): _description_
+            tensors (List[Tensor]): A list of tensors.
+                len(tensors) = b (batch size)
+                tensors[x].size() = (c=3, h, w)
+            mask (Optional[Tensor]): A list of masks (each mask finds which part of the padded image is the original image)
+                mask.shape = (b, h, w) # each of the masks is 2d h,w
         """
         self.tensors = tensors
         self.mask = mask

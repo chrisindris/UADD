@@ -128,6 +128,7 @@ class DeformableDETR(nn.Module):
                - "aux_outputs": Optional, only returned when auxilary losses are activated. It is a list of
                                 dictionnaries containing the two above keys for each decoder layer.
         """
+        # -- pass through backbone (includes pos embedding) --
         if not isinstance(samples, NestedTensor):
             samples = nested_tensor_from_tensor_list(samples)
         features, pos = self.backbone(samples)
@@ -135,7 +136,7 @@ class DeformableDETR(nn.Module):
         srcs = []
         masks = []
         for l, feat in enumerate(features):
-            src, mask = feat.decompose()
+            src, mask = feat.decompose() # return self.tensors, self.mask
             srcs.append(self.input_proj[l](src))
             masks.append(mask)
             assert mask is not None
@@ -148,11 +149,12 @@ class DeformableDETR(nn.Module):
                     src = self.input_proj[l](srcs[-1])
                 m = samples.mask
                 mask = F.interpolate(m[None].float(), size=src.shape[-2:]).to(torch.bool)[0]
-                pos_l = self.backbone[1](NestedTensor(src, mask)).to(src.dtype)
+                pos_l = self.backbone[1](NestedTensor(src, mask)).to(src.dtype) # self.backbone[1] is the positional_embedding
                 srcs.append(src)
                 masks.append(mask)
                 pos.append(pos_l)
 
+        # -- pass through transformer --
         query_embeds = None
         if not self.two_stage:
             query_embeds = self.query_embed.weight

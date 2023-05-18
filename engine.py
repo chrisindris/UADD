@@ -43,8 +43,8 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
     # It is 59143 because train2017 has 118286 images and 118286 / batch_size=2 = 59143
     for _ in metric_logger.log_every(range(len(data_loader)), print_freq, header): # output the logs
 
-        print("engine.py type(samples)= ", type(samples))
-        outputs = model(samples)
+        # print("engine.py type(samples)= ", type(samples)) # NestedTensor
+        outputs = model(samples) # get the output predictions by forward() passing through full Deformable DETR model
         
         loss_dict = criterion(outputs, targets)
         weight_dict = criterion.weight_dict
