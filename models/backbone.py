@@ -137,6 +137,9 @@ class Joiner(nn.Sequential):
         self.num_channels = backbone.num_channels
 
     def forward(self, tensor_list: NestedTensor):
+        """ self[0] = backbone
+            self[1] = positional_embedding
+        """
         xs = self[0](tensor_list) # send the input (images?) through the backbone.
         out: List[NestedTensor] = [] # a list of nested tensors.
         pos = []
