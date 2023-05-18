@@ -25,7 +25,7 @@ class eca_layer(nn.Module):
         """getter function to show the attention weights from a particular eca_layer instance.
 
         Returns:
-            tensor: the attention weight for this particular instance. Shape is [1,1,3].
+            tensor: the attention weight for this particular instance. Shape is [1,1,3]
         """
         return self.conv.state_dict()
 
