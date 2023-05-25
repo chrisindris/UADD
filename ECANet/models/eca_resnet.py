@@ -89,15 +89,16 @@ class ECABottleneck(nn.Module):
         out = self.conv3(out)
         out = self.bn3(out)
 
-        # print(type(out)) # tensor
-
         # print(out.size()) =
         """ 
-        For each image:
+        This corresponds to x in eca_layer (no size modifications are made to x in eca_layer)
+        For each batch (batch_size=2), a tensor of size:
             3x [2, 256, x, y]
             4x [2, 512, x/2, y/2]
             6x [2, 1024, x/4, y/4]
             3x [2, 2048, x/8, y/8]
+
+        ie. [N, C, H, W]
         """ 
 
         out = self.eca(out) # forward step 2: from eca_module

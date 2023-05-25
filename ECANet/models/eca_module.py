@@ -34,8 +34,16 @@ class eca_layer(nn.Module):
         # Multi-scale information fusion
         y = self.sigmoid(y)
 
-        # get the size (should be a vector of size C)
-        print("y.size()=", y.size())
+        #print("y.size()=", y.size())
+        """
+        For each batch (batch_size=2), a tensor of size [N, C, 1, 1]:
+            3x [2, 256, 1, 1]
+            4x [2, 512, 1, 1]
+            6x [2, 1024, 1, 1]
+            3x [2, 2048, 1, 1]
+
+        So, for each image in the batch we have 16 vectors of various lengths.
+        """
 
         return x * y.expand_as(x) #, self.get_attention_weights() # ensure that the dimensions match up
         

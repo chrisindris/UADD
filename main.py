@@ -132,6 +132,9 @@ def get_args_parser():
     # ECA
     parser.add_argument('--eca', action='store_true', help="Use ECA")
 
+    # Distributed
+    parser.add_argument('--distributed', default=False, help="Distributed Training")
+
     return parser
 
 
