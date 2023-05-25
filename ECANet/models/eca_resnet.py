@@ -258,6 +258,9 @@ class ResNet(nn.Module):
         x = x.view(x.size(0), -1)
         x = self.fc(x) # fully connected
 
+        # ResNet x
+        print("ResNet.forward() x.size() =", x.size())
+
         return x
 
 
