@@ -95,12 +95,41 @@ class BackboneBase(nn.Module):
         self.body = IntermediateLayerGetter(backbone, return_layers=return_layers)
 
     def forward(self, tensor_list: NestedTensor):
+        """
+        From tensor_list, which is an instance of NestedTensor:
+
+        tensor_list.tensors.size() = torch.Size([2, 3, x, y]) (example: x,y=768,650)
+        Basically, this is a size-2 batch of color images that have both been padded to the same size [3, x, y]
+
+        tensor_list.mask.size() = torch.Size([2,x,y])
+        Here are the masks which go with the associated images/tensors.
+        """
         xs = self.body(tensor_list.tensors) # pass images through backbone to get feature maps # forward step 4: from eca_resnet50    
         out: Dict[str, NestedTensor] = {}
         for name, x in xs.items():
+            """ For each batch:
+            xs.size() = [2,3,a,b] (see above: this is before passing into backbone)
+            After passing through backbone, xs is collections.OrderedDict
+
+            name seems to enumerate the blocks in the backbone
+
+            it seems as though a = 8x and b ~= 8y:
+            name = 0, x.size() = [2, 512, x, y], mask.size() = [2, x, y]
+            name = 1, x.size() = [2, 1024, x/2, y/2], mask.size() = [2, x/2, y/2]
+            name = 2, x.size() = [2, 2048, x/4, y/4], mask.size() = [2, x/4, y/4]
+
+            For all of the above (name = 0,1,2):
+            m.size() = [2, a, b] (makes sense, as it is stores 2d masks for the images, each the same size of the padded images)
+            """
             m = tensor_list.mask
             assert m is not None
+            """
+            If m.size()=[2,a,b], m[None].size()=[1,2,a,b]. We convert boolean matrix m[None] to a float for interpolation purposes, downsample to [x, y] (or [x/2, y/2], or [x/4, y/4]) and convert back to a boolean mask. The [0] means to get rid of the extra unneeded dimension (go from [1,2,a,b] to [2,a,b])
+            """
             mask = F.interpolate(m[None].float(), size=x.shape[-2:]).to(torch.bool)[0] # ensure the mask matches the size of the feature maps
+            """ 
+            Dictionary with keys of name (0, 1, 2) and the NestedTensor (x and mask) associated at that block
+            """
             out[name] = NestedTensor(x, mask) # the feature map and the mask
         return out
 
@@ -139,11 +168,16 @@ class Joiner(nn.Sequential):
     def forward(self, tensor_list: NestedTensor):
 
         out: List[NestedTensor] = [] # a list of nested tensors.
+
+        """
+        Consult the comments in forward() of BackboneBase for the inputs and outputs to the backbone here.
+        """
         xs = self[0](tensor_list) # send the input (images?) through the backbone.
+
         for name, x in sorted(xs.items()): # items() means that the dict structure of name, x becomes list of tuples
             out.append(x) # output of backbone
 
-        # position encoding for the particular image
+        # position encoding for the particular image (for what came through the backbone)
         pos = []
         for x in out:
             pos.append(self[1](x).to(x.tensors.dtype)) # the associated position

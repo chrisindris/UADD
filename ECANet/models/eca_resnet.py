@@ -5,12 +5,16 @@ from .eca_module import eca_layer
 
 
 def conv3x3(in_planes, out_planes, stride=1):
+    """Not used for ResNet-50"""
     """3x3 convolution with padding"""
     return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
                      padding=1, bias=False)
 
 
 class ECABasicBlock(nn.Module):
+    """
+    Not used for ResNet-50.
+    """
     expansion = 1
 
     def __init__(self, inplanes, planes, stride=1, downsample=None, k_size=3):
@@ -89,8 +93,8 @@ class ECABottleneck(nn.Module):
         out = self.conv3(out)
         out = self.bn3(out)
 
-        # print(out.size()) =
         """ 
+        print(out.size())
         This corresponds to x in eca_layer (no size modifications are made to x in eca_layer)
         For each batch (batch_size=2), a tensor of size:
             3x [2, 256, x, y]
@@ -120,6 +124,7 @@ class ECABottleneck(nn.Module):
 
 
 class ECAResNetLayer(nn.Module):
+    """My attempt at _make_layer as a class"""
     
     def __init__(self, block, inplanes, planes, blocks, k_size, stride=1):
         super(ECAResNetLayer, self).__init__()
@@ -153,8 +158,6 @@ class ECAResNetLayer(nn.Module):
             x = layer(x)
         return x
         
-        
-
 
 class ResNet(nn.Module):
 

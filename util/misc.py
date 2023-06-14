@@ -362,7 +362,8 @@ def nested_tensor_from_tensor_list(tensor_list: List[Tensor]):
 
 class NestedTensor(object):
     def __init__(self, tensors, mask: Optional[Tensor]):
-        """Data structure representing a list (ie. the batch) of tensors and their masks
+        """Data structure representing a list (ie. the batch) of tensors and their masks.
+        Could this be modified to help with the attention passing?
 
         Args:
             tensors (List[Tensor]): A list of tensors.
