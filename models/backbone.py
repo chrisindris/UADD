@@ -9,7 +9,8 @@
 
 """
 Backbone modules.
-"""
+""" 
+
 from collections import OrderedDict
 
 import torch
@@ -174,7 +175,10 @@ class Joiner(nn.Sequential):
         """
         xs = self[0](tensor_list) # send the input (images?) through the backbone.
 
+        print("=== Output from Backbone ===")
         for name, x in sorted(xs.items()): # items() means that the dict structure of name, x becomes list of tuples
+            print("name =", name)
+            print("x.size() =", x.size())
             out.append(x) # output of backbone
 
         # position encoding for the particular image (for what came through the backbone)
