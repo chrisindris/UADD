@@ -177,8 +177,9 @@ class Joiner(nn.Sequential):
 
         print("=== Output from Backbone ===")
         for name, x in sorted(xs.items()): # items() means that the dict structure of name, x becomes list of tuples
-            print("name =", name)
-            print("x.size() =", x.size())
+            print("name =", name) # ranges from 0 to 2 with each "output from backbone"
+            print("x.tensors.size() =", x.tensors.size()) # [2, 2^{9 + name}, x/2^{name}, y/2^{name}]
+            print("x.mask.size() =", x.mask.size()) # [2, x/2^{name}, y/2^{name}]
             out.append(x) # output of backbone
 
         # position encoding for the particular image (for what came through the backbone)
