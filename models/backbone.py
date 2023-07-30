@@ -23,7 +23,7 @@ from typing import Dict, List
 from util.misc import NestedTensor, is_main_process
 from .position_encoding import build_position_encoding
 
-from ECANet.models.eca_resnet import eca_resnet50
+# from ECANet.models.eca_resnet import eca_resnet50 # imported below to avoid circular import
 
 
 class FrozenBatchNorm2d(torch.nn.Module):
@@ -60,6 +60,35 @@ class FrozenBatchNorm2d(torch.nn.Module):
     def forward(self, x):
         # move reshapes to the beginning
         # to make it fuser-friendly
+        
+        """
+        print("x.size() =", x.size())
+        print("self.weight.size() =", self.weight.size())
+        print("self.bias.size() =", self.bias.size())
+        print("self.running_var.size() =", self.running_var.size())
+        print("self.running_mean.size() =", self.running_mean.size())
+        
+        for x.size() = [2, C, x, y]:
+        weight, bias, running_var, running_mean all have size torch.Size([C]) (ie. a C-dimensional array)
+        After .reshape(1, -1, 1, 1) these become torch.Size([1, C, 1, 1]) (to agree with the batch size)
+
+        # if we are using just one instance of it
+        x.size() = torch.Size([2, 64, 320, 384])
+        self.weight.size() = torch.Size([64])
+        self.bias.size() = torch.Size([64])
+        self.running_var.size() = torch.Size([64])
+        self.running_mean.size() = torch.Size([64])
+        x.size() = torch.Size([2, 64, 288, 426])
+        self.weight.size() = torch.Size([64])
+        self.bias.size() = torch.Size([64])
+        self.running_var.size() = torch.Size([64])
+        self.running_mean.size() = torch.Size([64])
+        x.size() = torch.Size([2, 64, 336, 466])
+        self.weight.size() = torch.Size([64])
+        self.bias.size() = torch.Size([64])
+        self.running_var.size() = torch.Size([64])
+        self.running_mean.size() = torch.Size([64])
+        """
         w = self.weight.reshape(1, -1, 1, 1)
         b = self.bias.reshape(1, -1, 1, 1)
         rv = self.running_var.reshape(1, -1, 1, 1)
@@ -145,11 +174,13 @@ class Backbone(BackboneBase):
         norm_layer = FrozenBatchNorm2d
         
         if eca:
+            from ECANet.models.eca_resnet import eca_resnet50
             backbone = eca_resnet50(num_classes=91) # use the ECA model
         else: 
             backbone = getattr(torchvision.models, name)(
                 replace_stride_with_dilation=[False, False, dilation],
                 pretrained=is_main_process(), norm_layer=norm_layer) # get the resnet50 backbone
+            # print("type(backbone) =", type(backbone)) # torch.models.resnet.ResNet
         
         assert name not in ('resnet18', 'resnet34'), "number of channels are hard coded"
         super().__init__(backbone, train_backbone, return_interm_layers) # BackboneBase
@@ -175,11 +206,13 @@ class Joiner(nn.Sequential):
         """
         xs = self[0](tensor_list) # send the input (images?) through the backbone.
 
-        print("=== Output from Backbone ===")
+        # print("=== Output from Backbone ===")
         for name, x in sorted(xs.items()): # items() means that the dict structure of name, x becomes list of tuples
-            print("name =", name) # ranges from 0 to 2 with each "output from backbone"
+            """
+            print("name =", name) # ranges from 0 to 2 with each "output from backbone"; as the batch passes through the backbone/encoder
             print("x.tensors.size() =", x.tensors.size()) # [2, 2^{9 + name}, x/2^{name}, y/2^{name}]
             print("x.mask.size() =", x.mask.size()) # [2, x/2^{name}, y/2^{name}]
+            """
             out.append(x) # output of backbone
 
         # position encoding for the particular image (for what came through the backbone)

@@ -3,6 +3,9 @@ import math
 # import torch.utils.model_zoo as model_zoo
 from .eca_module import eca_layer
 
+import sys
+sys.path.insert(1, "..")
+
 
 def conv3x3(in_planes, out_planes, stride=1):
     """Not used for ResNet-50"""
@@ -18,12 +21,14 @@ class ECABasicBlock(nn.Module):
     expansion = 1
 
     def __init__(self, inplanes, planes, stride=1, downsample=None, k_size=3):
+        from UADD.models.backbone import FrozenBatchNorm2d
+        
         super(ECABasicBlock, self).__init__()
         self.conv1 = conv3x3(inplanes, planes, stride)
-        self.bn1 = nn.BatchNorm2d(planes)
+        self.bn1 = FrozenBatchNorm2d(planes)
         self.relu = nn.ReLU(inplace=True)
         self.conv2 = conv3x3(planes, planes, 1)
-        self.bn2 = nn.BatchNorm2d(planes)
+        self.bn2 = FrozenBatchNorm2d(planes)
         self.eca = eca_layer(planes, k_size)
         self.downsample = downsample
         self.stride = stride
@@ -60,14 +65,16 @@ class ECABottleneck(nn.Module):
             downsample (Any, optional): used like a boolean to select downsampling. Defaults to None.
             k_size (int, optional): kernel size. Defaults to 3.
         """
+        from UADD.models.backbone import FrozenBatchNorm2d
+        
         super(ECABottleneck, self).__init__()
         self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(planes)
+        self.bn1 = FrozenBatchNorm2d(planes)
         self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride,
                                padding=1, bias=False)
-        self.bn2 = nn.BatchNorm2d(planes)
+        self.bn2 = FrozenBatchNorm2d(planes)
         self.conv3 = nn.Conv2d(planes, planes * 4, kernel_size=1, bias=False)
-        self.bn3 = nn.BatchNorm2d(planes * 4)
+        self.bn3 = FrozenBatchNorm2d(planes * 4)
         self.relu = nn.ReLU(inplace=True)
         self.eca = eca_layer(planes * 4, k_size)
         self.downsample = downsample
@@ -127,6 +134,8 @@ class ECAResNetLayer(nn.Module):
     """My attempt at _make_layer as a class"""
     
     def __init__(self, block, inplanes, planes, blocks, k_size, stride=1):
+        from UADD.models.backbone import FrozenBatchNorm2d
+        
         super(ECAResNetLayer, self).__init__()
         self.block = block
         self.inplanes = inplanes
@@ -140,7 +149,7 @@ class ECAResNetLayer(nn.Module):
             self.downsample = nn.Sequential(
                 nn.Conv2d(self.inplanes, self.planes * self.block.expansion,
                           kernel_size=1, stride=self.stride, bias=False),
-                nn.BatchNorm2d(planes * block.expansion),
+                FrozenBatchNorm2d(planes * block.expansion),
             )
             
         self.layers = []
@@ -171,11 +180,13 @@ class ResNet(nn.Module):
             num_classes (int, optional): number of classes. Defaults to 1000.
             k_size (list, optional): _description_. Defaults to [3, 3, 3, 3].
         """
+        from UADD.models.backbone import FrozenBatchNorm2d
+        
         self.inplanes = 64
         super(ResNet, self).__init__()
         self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
                                bias=False)
-        self.bn1 = nn.BatchNorm2d(64)
+        self.bn1 = FrozenBatchNorm2d(64)
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.layer1 = self._make_layer(block, 64, layers[0], int(k_size[0]))
@@ -212,12 +223,14 @@ class ResNet(nn.Module):
         Returns:
             _type_: _description_
         """
+        from UADD.models.backbone import FrozenBatchNorm2d
+        
         downsample = None
         if stride != 1 or self.inplanes != planes * block.expansion:
             downsample = nn.Sequential(
                 nn.Conv2d(self.inplanes, planes * block.expansion,
                           kernel_size=1, stride=stride, bias=False),
-                nn.BatchNorm2d(planes * block.expansion),
+                FrozenBatchNorm2d(planes * block.expansion),
             )
 
         layers = []
