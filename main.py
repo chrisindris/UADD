@@ -42,8 +42,7 @@ def get_args_parser():
     parser.add_argument('--epochs', default=15, type=int) # num of epochs to train
     parser.add_argument('--lr_drop', default=40, type=int) # weight is decayed at 40th epoch
     parser.add_argument('--lr_drop_epochs', default=None, type=int, nargs='+') # unused
-    parser.add_argument('--clip_max_norm', default=0.1, type=float,
-                        help='gradient clipping max norm') # helps with vanishing/exploding gradients
+    parser.add_argument('--clip_max_norm', default=0.1, type=float, help='gradient clipping max norm') # helps with vanishing/exploding gradients
 
 
     parser.add_argument('--sgd', action='store_true') # SGD training; boolean, defaults to true

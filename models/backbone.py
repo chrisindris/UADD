@@ -176,6 +176,9 @@ class Backbone(BackboneBase):
         if eca:
             from ECANet.models.eca_resnet import eca_resnet50
             backbone = eca_resnet50(num_classes=91) # use the ECA model
+            # modifed to use FrozenBatchNorm2d
+            # perhaps we don't want pretrained
+            # dilation is not used by eca_resnet50 but I added default [False, False, True]
         else: 
             backbone = getattr(torchvision.models, name)(
                 replace_stride_with_dilation=[False, False, dilation],

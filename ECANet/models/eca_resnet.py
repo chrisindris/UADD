@@ -7,11 +7,11 @@ import sys
 sys.path.insert(1, "..")
 
 
-def conv3x3(in_planes, out_planes, stride=1):
+def conv3x3(in_planes, out_planes, stride=1, dilation=1):
     """Not used for ResNet-50"""
     """3x3 convolution with padding"""
     return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
-                     padding=1, bias=False)
+                     padding=dilation, bias=False, dilation=dilation)
 
 
 class ECABasicBlock(nn.Module):
@@ -55,7 +55,7 @@ class ECABasicBlock(nn.Module):
 class ECABottleneck(nn.Module):
     expansion = 4
 
-    def __init__(self, inplanes, planes, stride=1, downsample=None, k_size=3):
+    def __init__(self, inplanes, planes, stride=1, downsample=None, k_size=3, dilation=1):
         """Class for ECABottleneck network (the block within each conv layer)
 
         Args:
@@ -171,7 +171,7 @@ class ECAResNetLayer(nn.Module):
 class ResNet(nn.Module):
 
     # SHOULD WE USE 91 CLASSES (COCO)?
-    def __init__(self, block, layers, num_classes=1000, k_size=[3, 3, 3, 3]):
+    def __init__(self, block, layers, num_classes=1000, k_size=[3, 3, 3, 3], replace_stride_with_dilation=[False, False, True]):
         """Class for the ResNet architecture
 
         Args:
@@ -183,6 +183,8 @@ class ResNet(nn.Module):
         from UADD.models.backbone import FrozenBatchNorm2d
         
         self.inplanes = 64
+        self.dilation = 1
+        
         super(ResNet, self).__init__()
         self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
                                bias=False)
@@ -190,9 +192,9 @@ class ResNet(nn.Module):
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.layer1 = self._make_layer(block, 64, layers[0], int(k_size[0]))
-        self.layer2 = self._make_layer(block, 128, layers[1], int(k_size[1]), stride=2)
-        self.layer3 = self._make_layer(block, 256, layers[2], int(k_size[2]), stride=2)
-        self.layer4 = self._make_layer(block, 512, layers[3], int(k_size[3]), stride=2)
+        self.layer2 = self._make_layer(block, 128, layers[1], int(k_size[1]), stride=2, dilate=replace_stride_with_dilation[0])
+        self.layer3 = self._make_layer(block, 256, layers[2], int(k_size[2]), stride=2, dilate=replace_stride_with_dilation[1])
+        self.layer4 = self._make_layer(block, 512, layers[3], int(k_size[3]), stride=2, dilate=replace_stride_with_dilation[2])
         self.avgpool = nn.AvgPool2d(7, stride=1)
         self.fc = nn.Linear(512 * block.expansion, num_classes)
 
@@ -210,7 +212,7 @@ class ResNet(nn.Module):
         #   if isinstance(m, ECABottleneck):
         #     print(m)
 
-    def _make_layer(self, block, planes, blocks, k_size, stride=1):
+    def _make_layer(self, block, planes, blocks, k_size, stride=1, dilate=False):
         """Make one of the conv layers in resnet (a "layer" is the chunk that the residual connection skips)
 
         Args:
@@ -225,6 +227,10 @@ class ResNet(nn.Module):
         """
         from UADD.models.backbone import FrozenBatchNorm2d
         
+        if dilate:
+            self.dilation *= stride
+            stride = 1
+        
         downsample = None
         if stride != 1 or self.inplanes != planes * block.expansion:
             downsample = nn.Sequential(
@@ -234,12 +240,12 @@ class ResNet(nn.Module):
             )
 
         layers = []
-        layers.append(block(self.inplanes, planes, stride, downsample, k_size))
+        layers.append(block(self.inplanes, planes, stride, downsample, k_size, dilation=self.dilation))
         self.inplanes = planes * block.expansion
         
         # within a particular layer, the residual is repeated
         for i in range(1, blocks):
-            layers.append(block(self.inplanes, planes, k_size=k_size))
+            layers.append(block(self.inplanes, planes, k_size=k_size, dilation=self.dilation))
 
         return nn.Sequential(*layers)
 
