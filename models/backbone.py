@@ -221,6 +221,16 @@ class Joiner(nn.Sequential):
         # position encoding for the particular image (for what came through the backbone)
         pos = []
         for x in out:
+            """ For each iteration:
+            o = self[1](x).to(x.tensors.dtype)
+            
+            x.tensors.size() = torch.Size([2, 512, 80, 96])
+            o.size() = torch.Size([2, 256, 80, 96])
+            x.tensors.size() = torch.Size([2, 1024, 40, 48])
+            o.size() = torch.Size([2, 256, 40, 48])
+            x.tensors.size() = torch.Size([2, 2048, 40, 48])
+            o.size() = torch.Size([2, 256, 40, 48])
+            """
             pos.append(self[1](x).to(x.tensors.dtype)) # the associated position
 
         return out, pos # the backbone features and the encoding
