@@ -201,15 +201,15 @@ class Joiner(nn.Sequential):
         self.num_channels = backbone.num_channels
 
     def forward(self, tensor_list: NestedTensor):
-
-        out: List[NestedTensor] = [] # a list of nested tensors.
-
-        """
+        """ 
+        Sends the tensor_list through the backbone to get the feature maps. 
+        From there, store feature maps in out and calculate (send through pos embedding) and store these in pos. 
+        
         Consult the comments in forward() of BackboneBase for the inputs and outputs to the backbone here.
         """
+        out: List[NestedTensor] = [] # a list of nested tensors.
         xs = self[0](tensor_list) # send the input (images?) through the backbone.
 
-        # print("=== Output from Backbone ===")
         for name, x in sorted(xs.items()): # items() means that the dict structure of name, x becomes list of tuples
             """
             print("name =", name) # ranges from 0 to 2 with each "output from backbone"; as the batch passes through the backbone/encoder

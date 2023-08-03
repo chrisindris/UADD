@@ -165,6 +165,8 @@ def main(args):
     model_without_ddp = model # ddp = distributed data parallel
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print('number of params:', n_parameters) # number of trainable parameters
+    
+    # -- Datasets --
 
     # build the training and testing datasets
     dataset_train = build_dataset(image_set='train', args=args)
@@ -187,7 +189,6 @@ def main(args):
         sampler_train, args.batch_size, drop_last=True)
     
     # Create the data loaders (iterable for loading data into model)
-
     data_loader_train = DataLoader(dataset_train, batch_sampler=batch_sampler_train,
                                    collate_fn=utils.collate_fn, num_workers=args.num_workers,
                                    pin_memory=True)
@@ -262,6 +263,8 @@ def main(args):
         model_without_ddp.detr.load_state_dict(checkpoint['model'])
 
     output_dir = Path(args.output_dir)
+    
+    # (optional) to resume training with args.resume
     if args.resume:
         if args.resume.startswith('https'):
             checkpoint = torch.hub.load_state_dict_from_url(
@@ -310,7 +313,8 @@ def main(args):
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
             sampler_train.set_epoch(epoch)
-            
+        
+        # epoch of training
         train_stats = train_one_epoch(
             model, criterion, data_loader_train, optimizer, device, epoch, args.clip_max_norm)
         
@@ -329,6 +333,7 @@ def main(args):
                     'args': args,
                 }, checkpoint_path)
 
+        # after training, eval on validation
         test_stats, coco_evaluator = evaluate(
             model, criterion, postprocessors, data_loader_val, base_ds, device, args.output_dir
         )

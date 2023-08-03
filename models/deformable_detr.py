@@ -57,9 +57,13 @@ class DeformableDETR(nn.Module):
         self.bbox_embed = MLP(hidden_dim, hidden_dim, 4, 3)
         self.num_feature_levels = num_feature_levels
         if not two_stage:
-            self.query_embed = nn.Embedding(num_queries, hidden_dim*2)
+            self.query_embed = nn.Embedding(num_queries, hidden_dim*2) # a lookup table to embed the num_queries=300 obj queries, each of dimension hidden_dim*2=512. 
+            
+        # converts the dimension of the feature maps at the different feature maps into the same dimension (hidden_dim = 256).
+        # see Appendix A.2
+        #TODO: Ensure that the feature maps are following the dimensions according to Appendix A.2 Fig. 4; I think ECANet's C5 is giving us H/16 rather than H/32 (perhaps due to the lack of dilation from [False, False, dilate]?)  
         if num_feature_levels > 1:
-            num_backbone_outs = len(backbone.strides)
+            num_backbone_outs = len(backbone.strides) # backbone.strides = [8, 16, 32]
             input_proj_list = []
             for _ in range(num_backbone_outs):
                 in_channels = backbone.num_channels[_]
@@ -80,6 +84,8 @@ class DeformableDETR(nn.Module):
                     nn.Conv2d(backbone.num_channels[0], hidden_dim, kernel_size=1),
                     nn.GroupNorm(32, hidden_dim),
                 )])
+            
+            
         self.backbone = backbone
         self.aux_loss = aux_loss
         self.with_box_refine = with_box_refine
@@ -128,18 +134,42 @@ class DeformableDETR(nn.Module):
                - "aux_outputs": Optional, only returned when auxilary losses are activated. It is a list of
                                 dictionnaries containing the two above keys for each decoder layer.
         """
-        # -- pass through backbone (includes pos embedding) --
+        """
+        source, mask = samples.decompose()
+        source.size() = [B=2, C=3, X, Y] (first 3 examples: [2, 3, 736, 875], [2, 3, 640, 768], [2, 3, 576, 852])
+        mask.size() = [B, X, Y]
+        """
+        
+        # -- pass through backbone (includes pos embedding) to return the feature maps and the pos embeddings --
         if not isinstance(samples, NestedTensor):
             samples = nested_tensor_from_tensor_list(samples)
         features, pos = self.backbone(samples)
+        
+        """
+        len(features) = len(pos) = 3
+        
+        features[0].tensors.size() = [2, 512, x=~X/8, y=~Y/8] (first example: [2, 512, 92, 110])
+        features[1].tensors.size() = [2, 1024, x/2, y/2] (first example: [2, 1024, 46, 55])
+        features[2].tensors.size() = [2, 2048, x/2, y/2]
+        
+        features[0].mask.size() = [2, x, y]
+        features[1].mask.size() = [2, x/2, y/2]
+        features[2].mask.size() = [2, x/2, y/2]
+        
+        pos[0].size() = [2, 256, x, y]
+        pos[1].size() = [2, 256, x/2, y/2]
+        pos[2].size() = [2, 256, x/2, y/2]
+        """
 
         srcs = []
         masks = []
-        for l, feat in enumerate(features):
+        # - convert the outputted feature maps into 256-channel -
+        for l, feat in enumerate(features): 
             src, mask = feat.decompose() # return self.tensors, self.mask
             srcs.append(self.input_proj[l](src))
             masks.append(mask)
             assert mask is not None
+        # - if we need to get additional maps/masks/embeddings to meet the desired num of feature levels: -
         if self.num_feature_levels > len(srcs):
             _len_srcs = len(srcs)
             for l in range(_len_srcs, self.num_feature_levels):
@@ -153,6 +183,22 @@ class DeformableDETR(nn.Module):
                 srcs.append(src)
                 masks.append(mask)
                 pos.append(pos_l)
+                
+        """
+        len(srcs) = len(masks) = len(pos) = 4
+        
+        scrs[0].tensors.size() = [2, 256, x=~X/8, y=~Y/8] (first example: [2, 256, 92, 110])
+        scrs[1].tensors.size() = scrs[2].tensors.size() = [2, 256, x/2, y/2]
+        scrs[3].tensors.size() = [2, 256, x/4, y/4]
+        
+        features[0].mask.size() = [2, x, y]
+        features[1].mask.size() = features[2].mask.size() = [2, x/2, y/2]
+        features[3].mask.size() = [2, x/4, y/4]
+        
+        pos[0].size() = [2, 256, x, y]
+        pos[1].size() = pos[2].size() = [2, 256, x/2, y/2]
+        pos[3].size() = [2, 256, x/4, y/4]
+        """
 
         # -- pass through transformer --
         query_embeds = None
@@ -470,6 +516,7 @@ def build(args):
         two_stage=args.two_stage,
     )
     
+    # For segmentation only:
     if args.masks:
         model = DETRsegm(model, freeze_detr=(args.frozen_weights is not None))
         
