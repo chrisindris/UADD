@@ -206,6 +206,14 @@ class DeformableDETR(nn.Module):
             query_embeds = self.query_embed.weight
         hs, init_reference, inter_references, enc_outputs_class, enc_outputs_coord_unact = self.transformer(srcs, masks, pos, query_embeds)
 
+        """
+        print("hs.size() =", hs.size()) # [6, 2, 300, 256]
+        print("init_reference.size() =", init_reference.size()) # [2, 300, 2]
+        print("inter_references.size() =", inter_references.size()) # [6, 2, 300, 2]
+        #print("type(enc_outputs_class) =", type(enc_outputs_class)) # None
+        #print("type(enc_outputs_coord_unact) =", type(enc_outputs_coord_unact)) # None
+        """
+
         outputs_classes = []
         outputs_coords = []
         for lvl in range(hs.shape[0]):

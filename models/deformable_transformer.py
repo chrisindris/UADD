@@ -174,16 +174,16 @@ class DeformableTransformer(nn.Module):
             bs, c, h, w = src.shape # batch: batchsize (num of imgs), channels=3, h and w for largest image
             spatial_shape = (h, w)
             spatial_shapes.append(spatial_shape)
-            src = src.flatten(2).transpose(1, 2)
-            mask = mask.flatten(1)
-            pos_embed = pos_embed.flatten(2).transpose(1, 2)
+            src = src.flatten(2).transpose(1, 2) # [B=2, C=256, x', y'] -> [C=256, f = x' * y', B=2] (flatten each channel to 1D)
+            mask = mask.flatten(1) # [B, x', y'] -> [B, f]
+            pos_embed = pos_embed.flatten(2).transpose(1, 2) # [B=2, C=256, x', y'] -> [C=256, f = x' * y', B=2]
             lvl_pos_embed = pos_embed + self.level_embed[lvl].view(1, 1, -1) # position and level embed
             lvl_pos_embed_flatten.append(lvl_pos_embed)
             src_flatten.append(src)
             mask_flatten.append(mask)
             
-        src_flatten = torch.cat(src_flatten, 1) # concat src_flatten (a list of feature maps) into tensor
-        mask_flatten = torch.cat(mask_flatten, 1) # concat mask_flatten (a list of masks) into tensor
+        src_flatten = torch.cat(src_flatten, 1) # concat src_flatten (a list of feature maps) into tensor of size [B, S = sum(x' * y') for the 4 feature maps, C]
+        mask_flatten = torch.cat(mask_flatten, 1) # concat mask_flatten (a list of masks) into tensor of size [B, S]
         lvl_pos_embed_flatten = torch.cat(lvl_pos_embed_flatten, 1) # flatten the embeddings
         spatial_shapes = torch.as_tensor(spatial_shapes, dtype=torch.long, device=src_flatten.device) # convert list of dimension tuples to a tensor
         level_start_index = torch.cat((spatial_shapes.new_zeros((1, )), spatial_shapes.prod(1).cumsum(0)[:-1])) # to index where the levels are of the feature maps
