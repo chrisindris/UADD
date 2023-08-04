@@ -170,30 +170,30 @@ class DeformableTransformer(nn.Module):
         mask_flatten = []
         lvl_pos_embed_flatten = []
         spatial_shapes = []
-        for lvl, (src, mask, pos_embed) in enumerate(zip(srcs, masks, pos_embeds)):
+        for lvl, (src, mask, pos_embed) in enumerate(zip(srcs, masks, pos_embeds)): # iterate over the 4 feature levels
             bs, c, h, w = src.shape # batch: batchsize (num of imgs), channels=3, h and w for largest image
             spatial_shape = (h, w)
             spatial_shapes.append(spatial_shape)
-            src = src.flatten(2).transpose(1, 2) # [B=2, C=256, x', y'] -> [C=256, f = x' * y', B=2] (flatten each channel to 1D)
+            src = src.flatten(2).transpose(1, 2) # [B=2, C=256, x', y'] -> [B=2, f = x' * y', C=256] (flatten each channel to 1D)
             mask = mask.flatten(1) # [B, x', y'] -> [B, f]
-            pos_embed = pos_embed.flatten(2).transpose(1, 2) # [B=2, C=256, x', y'] -> [C=256, f = x' * y', B=2]
-            lvl_pos_embed = pos_embed + self.level_embed[lvl].view(1, 1, -1) # position and level embed
+            pos_embed = pos_embed.flatten(2).transpose(1, 2) # [B=2, C=256, x', y'] -> [B=2, f = x' * y', C=256]
+            lvl_pos_embed = pos_embed + self.level_embed[lvl].view(1, 1, -1) # position and level embed added together; self.level_embed[lvl] is size [256] -> [1, 1, 256] by view -> broadcasted to [B, f, 256] (size of pos_embed and lvl_pos_embed)
             lvl_pos_embed_flatten.append(lvl_pos_embed)
             src_flatten.append(src)
             mask_flatten.append(mask)
             
         src_flatten = torch.cat(src_flatten, 1) # concat src_flatten (a list of feature maps) into tensor of size [B, S = sum(x' * y') for the 4 feature maps, C]
         mask_flatten = torch.cat(mask_flatten, 1) # concat mask_flatten (a list of masks) into tensor of size [B, S]
-        lvl_pos_embed_flatten = torch.cat(lvl_pos_embed_flatten, 1) # flatten the embeddings
-        spatial_shapes = torch.as_tensor(spatial_shapes, dtype=torch.long, device=src_flatten.device) # convert list of dimension tuples to a tensor
-        level_start_index = torch.cat((spatial_shapes.new_zeros((1, )), spatial_shapes.prod(1).cumsum(0)[:-1])) # to index where the levels are of the feature maps
-        valid_ratios = torch.stack([self.get_valid_ratio(m) for m in masks], 1)
+        lvl_pos_embed_flatten = torch.cat(lvl_pos_embed_flatten, 1) # flatten the embeddings into tensor of size [B, S, C]
+        spatial_shapes = torch.as_tensor(spatial_shapes, dtype=torch.long, device=src_flatten.device) # convert list of dimension tuples to a tensor of size [4, 2]
+        level_start_index = torch.cat((spatial_shapes.new_zeros((1, )), spatial_shapes.prod(1).cumsum(0)[:-1])) # to index where the levels are of the feature maps; size [4]
+        valid_ratios = torch.stack([self.get_valid_ratio(m) for m in masks], 1) # size [2, 4, 2]
 
         # encoder
-        memory = self.encoder(src_flatten, spatial_shapes, level_start_index, valid_ratios, lvl_pos_embed_flatten, mask_flatten)
+        memory = self.encoder(src_flatten, spatial_shapes, level_start_index, valid_ratios, lvl_pos_embed_flatten, mask_flatten) # memory.size() = [B=2, S, C=256]
 
         # prepare input for decoder
-        bs, _, c = memory.shape # batchsize, source, channel?
+        bs, _, c = memory.shape # batchsize, S, channel
         if self.two_stage:
             output_memory, output_proposals = self.gen_encoder_output_proposals(memory, mask_flatten, spatial_shapes)
 
@@ -210,15 +210,16 @@ class DeformableTransformer(nn.Module):
             pos_trans_out = self.pos_trans_norm(self.pos_trans(self.get_proposal_pos_embed(topk_coords_unact)))
             query_embed, tgt = torch.split(pos_trans_out, c, dim=2)
         else:
-            query_embed, tgt = torch.split(query_embed, c, dim=1)
-            query_embed = query_embed.unsqueeze(0).expand(bs, -1, -1)
-            tgt = tgt.unsqueeze(0).expand(bs, -1, -1)
-            reference_points = self.reference_points(query_embed).sigmoid()
+            query_embed, tgt = torch.split(query_embed, c, dim=1) # splits query_embed: torch.Size([300, 512]) -> query_embed: torch.Size([300, 256]) and tgt: torch.Size([300, 256]); splitting into query and target
+            query_embed = query_embed.unsqueeze(0).expand(bs, -1, -1) # [300, 256] -> [2, 300, 256] (we copy the query embedding for all images in the batch)
+            tgt = tgt.unsqueeze(0).expand(bs, -1, -1) # [300, 256] -> [2, 300, 256] (we copy the target embedding for all images in the batch)
+            reference_points = self.reference_points(query_embed).sigmoid() # through a learned linear projection, query_embed:[300, 256] -> reference_points:[300, 2] (and squeezed to range [0, 1] via sigmoid)
             init_reference_out = reference_points
 
         # decoder
         hs, inter_references = self.decoder(tgt, reference_points, memory,
                                             spatial_shapes, level_start_index, valid_ratios, query_embed, mask_flatten) # target (feature vectors), reference points
+        # hs.size() = torch.Size([6, 2, 300, 256]; inter_references = torch.Size([6, 2, 300, 2])
 
         inter_references_out = inter_references
         if self.two_stage:
