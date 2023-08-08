@@ -185,9 +185,9 @@ class DeformableTransformer(nn.Module):
         src_flatten = torch.cat(src_flatten, 1) # concat src_flatten (a list of feature maps) into tensor of size [B, S = sum(x' * y') for the 4 feature maps, C]
         mask_flatten = torch.cat(mask_flatten, 1) # concat mask_flatten (a list of masks) into tensor of size [B, S]
         lvl_pos_embed_flatten = torch.cat(lvl_pos_embed_flatten, 1) # flatten the embeddings into tensor of size [B, S, C]
-        spatial_shapes = torch.as_tensor(spatial_shapes, dtype=torch.long, device=src_flatten.device) # convert list of dimension tuples to a tensor of size [4, 2]
-        level_start_index = torch.cat((spatial_shapes.new_zeros((1, )), spatial_shapes.prod(1).cumsum(0)[:-1])) # to index where the levels are of the feature maps; size [4]
-        valid_ratios = torch.stack([self.get_valid_ratio(m) for m in masks], 1) # size [2, 4, 2]
+        spatial_shapes = torch.as_tensor(spatial_shapes, dtype=torch.long, device=src_flatten.device) # convert list of dimension tuples to a tensor of size [4, 2]=[num_feature_levels, 2 because spatial shape is size 2 (ie. height & width)]
+        level_start_index = torch.cat((spatial_shapes.new_zeros((1, )), spatial_shapes.prod(1).cumsum(0)[:-1])) # to index where the levels are of the feature maps; size [4]=[num_feature_levels] (a 4-vector due to the 4 feature maps used)
+        valid_ratios = torch.stack([self.get_valid_ratio(m) for m in masks], 1) # size [B=2, num_feature_levels=4, 2 because spatial shape is size 2 (ie. height & width)]
 
         # encoder
         memory = self.encoder(src_flatten, spatial_shapes, level_start_index, valid_ratios, lvl_pos_embed_flatten, mask_flatten) # memory.size() = [B=2, S, C=256]
@@ -206,15 +206,15 @@ class DeformableTransformer(nn.Module):
             topk_coords_unact = torch.gather(enc_outputs_coord_unact, 1, topk_proposals.unsqueeze(-1).repeat(1, 1, 4))
             topk_coords_unact = topk_coords_unact.detach()
             reference_points = topk_coords_unact.sigmoid()
-            init_reference_out = reference_points
+            init_reference_out = reference_points # two-stage, so these are (4D, since 2 2D points) bounding boxes
             pos_trans_out = self.pos_trans_norm(self.pos_trans(self.get_proposal_pos_embed(topk_coords_unact)))
             query_embed, tgt = torch.split(pos_trans_out, c, dim=2)
         else:
             query_embed, tgt = torch.split(query_embed, c, dim=1) # splits query_embed: torch.Size([300, 512]) -> query_embed: torch.Size([300, 256]) and tgt: torch.Size([300, 256]); splitting into query and target
-            query_embed = query_embed.unsqueeze(0).expand(bs, -1, -1) # [300, 256] -> [2, 300, 256] (we copy the query embedding for all images in the batch)
+            query_embed = query_embed.unsqueeze(0).expand(bs, -1, -1) # [300, 256] -> [B=2, 300, 256] (we copy the query embedding for all images in the batch)
             tgt = tgt.unsqueeze(0).expand(bs, -1, -1) # [300, 256] -> [2, 300, 256] (we copy the target embedding for all images in the batch)
-            reference_points = self.reference_points(query_embed).sigmoid() # through a learned linear projection, query_embed:[300, 256] -> reference_points:[300, 2] (and squeezed to range [0, 1] via sigmoid)
-            init_reference_out = reference_points
+            reference_points = self.reference_points(query_embed).sigmoid() # through a learned linear projection, query_embed:[B=2, 300, 256] -> reference_points:[B=2, 300, 2 since each point is 2D (height & width)] (each value squeezed to range [0, 1] via sigmoid)
+            init_reference_out = reference_points # this is one-stage, so reference_points has (2D) points
 
         # decoder
         hs, inter_references = self.decoder(tgt, reference_points, memory,
@@ -229,7 +229,7 @@ class DeformableTransformer(nn.Module):
 
 class DeformableTransformerEncoderLayer(nn.Module):
     def __init__(self,
-                 d_model=256, d_ffn=1024,
+                 d_model=256, d_ffn=1024, # dim of hidden layer of ffn
                  dropout=0.1, activation="relu",
                  n_levels=4, n_heads=8, n_points=4):
         super().__init__()
@@ -249,7 +249,7 @@ class DeformableTransformerEncoderLayer(nn.Module):
 
     @staticmethod
     def with_pos_embed(tensor, pos):
-        """For adding the relevant positional encoding to the tensor
+        """For adding the level and positional embedding to the tensor
 
         Args:
             tensor (_type_): _description_
@@ -264,6 +264,15 @@ class DeformableTransformerEncoderLayer(nn.Module):
     # -- Forward: Passing the array through --
 
     def forward_ffn(self, src):
+        """
+        Apply ffn, with hidden layer of size d_ffn with dropout and layer normalization 
+        
+        Parameters:
+            src (Tensor): The input source tensor (the batch + pos/layer embeddings).
+        
+        Returns:
+            Tensor: The output source tensor after applying the feed-forward neural network.
+        """
         src2 = self.linear2(self.dropout2(self.activation(self.linear1(src))))
         src = src + self.dropout3(src2)
         src = self.norm2(src) # add and norm
@@ -273,12 +282,12 @@ class DeformableTransformerEncoderLayer(nn.Module):
         # src: the source (input) ie. the extracted features
 
         # self attention
-        src2 = self.self_attn(self.with_pos_embed(src, pos), reference_points, src, spatial_shapes, level_start_index, padding_mask)
-        src = src + self.dropout1(src2)
-        src = self.norm1(src)
+        src2 = self.self_attn(self.with_pos_embed(src, pos), reference_points, src, spatial_shapes, level_start_index, padding_mask) # [2, S, 256]
+        src = src + self.dropout1(src2) # all are [2, S, 256]
+        src = self.norm1(src) # [2, S, 256]
 
         # ffn
-        src = self.forward_ffn(src)
+        src = self.forward_ffn(src) # [2, S, 256]
 
         return src
 
@@ -316,11 +325,11 @@ class DeformableTransformerEncoder(nn.Module):
 
     def forward(self, src, spatial_shapes, level_start_index, valid_ratios, pos=None, padding_mask=None):
         output = src
-        reference_points = self.get_reference_points(spatial_shapes, valid_ratios, device=src.device)
+        reference_points = self.get_reference_points(spatial_shapes, valid_ratios, device=src.device) # [2, S, 4, 2]
         
         # send the src input through the layers (the N=6 encoder layer copies)
         for _, layer in enumerate(self.layers):
-            output = layer(output, pos, reference_points, spatial_shapes, level_start_index, padding_mask)
+            output = layer(output, pos, reference_points, spatial_shapes, level_start_index, padding_mask) # all are [2, S, 256]
 
         return output
 
@@ -356,30 +365,53 @@ class DeformableTransformerDecoderLayer(nn.Module):
         return tensor if pos is None else tensor + pos
 
     def forward_ffn(self, tgt):
+        """feed-forward network; connects the true target with the target predicted from the self and cross attention 
+
+        Args:
+            tgt (tensor): size [2, 300, d_model=256]
+
+        Returns:
+            tensor: of the same size
+        """
         tgt2 = self.linear2(self.dropout3(self.activation(self.linear1(tgt))))
         tgt = tgt + self.dropout4(tgt2)
         tgt = self.norm3(tgt)
         return tgt
 
     def forward(self, tgt, query_pos, reference_points, src, src_spatial_shapes, level_start_index, src_padding_mask=None):
-        # tgt: target (the bounding box proposals)
+        """
+        Forward pass through the model.
+
+        Args:
+            tgt (Tensor): Target bounding boxes. [2, 300, 256]
+            query_pos (Tensor): Query positions for deformable attention. [2, 300, 256]
+            reference_points (Tensor): Reference points for deformable attention.
+            src (Tensor): Source tensors.
+            src_spatial_shapes (List[Tuple[int, int]]): Spatial shapes of source tensors.
+            level_start_index (List[int]): Start indices of each level in the source tensors.
+            src_padding_mask (Tensor, optional): Padding mask for source tensors. Defaults to None.
+
+        Returns:
+            Tensor: Output tensor after passing through the model.
+        """
+        # tgt: target (the bounding boxes)
         # reference points: for deformable attention
 
         # self attention
-        q = k = self.with_pos_embed(tgt, query_pos)
-        tgt2 = self.self_attn(q.transpose(0, 1), k.transpose(0, 1), tgt.transpose(0, 1))[0].transpose(0, 1)
+        q = k = self.with_pos_embed(tgt, query_pos) # [2, 300, 256]
+        tgt2 = self.self_attn(q.transpose(0, 1), k.transpose(0, 1), tgt.transpose(0, 1))[0].transpose(0, 1) # [2, 300, 256]
         tgt = tgt + self.dropout2(tgt2)
         tgt = self.norm2(tgt)
 
         # cross attention
         tgt2 = self.cross_attn(self.with_pos_embed(tgt, query_pos),
                                reference_points,
-                               src, src_spatial_shapes, level_start_index, src_padding_mask)
+                               src, src_spatial_shapes, level_start_index, src_padding_mask) # [2, 300, 256]
         tgt = tgt + self.dropout1(tgt2)
         tgt = self.norm1(tgt)
 
         # ffn
-        tgt = self.forward_ffn(tgt)
+        tgt = self.forward_ffn(tgt) # [2, 300, 256]
 
         return tgt
 
@@ -400,17 +432,23 @@ class DeformableTransformerDecoder(nn.Module):
 
         intermediate = []
         intermediate_reference_points = []
-        for lid, layer in enumerate(self.layers):
-            if reference_points.shape[-1] == 4:
+        for lid, layer in enumerate(self.layers): # lid = layer index (iterates num_decoder_layers=6 times)
+            if reference_points.shape[-1] == 4: # reference bounding boxes ie. 2 points
                 reference_points_input = reference_points[:, :, None] \
                                          * torch.cat([src_valid_ratios, src_valid_ratios], -1)[:, None]
             else:
-                assert reference_points.shape[-1] == 2
+                assert reference_points.shape[-1] == 2 # each reference point is a single (h, w) point
+                """
+                reference_points_input: [B=2, proposals=300, layers=4, reference_point dimensions = 2] from reference_points[:, :, None]: [2,300,1,2] and src_valid_ratios[:, None]: [2,1,4,2]
+                - the indexing of None explicitly specifies an extra dimension (the 1)
+                - to fit in [2, 300, 4, 2]: src_valid_ratios is copied 300 times (ie. for each proposal) and reference_points is copied 4 times (for each feature level)
+                """
                 reference_points_input = reference_points[:, :, None] * src_valid_ratios[:, None]
-            output = layer(output, query_pos, reference_points_input, src, src_spatial_shapes, src_level_start_index, src_padding_mask)
+            output = layer(output, query_pos, reference_points_input, src, src_spatial_shapes, src_level_start_index, src_padding_mask) # [2, 300, 256]
 
             # hack implementation for iterative bounding box refinement
             # See DefDETR A.4
+            # Should the [..., :2] be put in the == 4 case?
             if self.bbox_embed is not None:
                 tmp = self.bbox_embed[lid](output)
                 if reference_points.shape[-1] == 4:
@@ -423,12 +461,12 @@ class DeformableTransformerDecoder(nn.Module):
                     new_reference_points = new_reference_points.sigmoid()
                 reference_points = new_reference_points.detach()
 
-            if self.return_intermediate:
-                intermediate.append(output)
-                intermediate_reference_points.append(reference_points)
+            if self.return_intermediate: # ie. retain the output and ref points from each of the n=6 decoder layers
+                intermediate.append(output) # [2, 300, 256]
+                intermediate_reference_points.append(reference_points) # [2, 300, 2]
 
         if self.return_intermediate:
-            return torch.stack(intermediate), torch.stack(intermediate_reference_points)
+            return torch.stack(intermediate), torch.stack(intermediate_reference_points) # [6=num_decoder_layers, 2=batch_size, 300= num of obj. queries or obj. proposals, 256=d_model], [6=num_decoder_layers, 2=batch_size, 300= num of obj. queries or obj. proposals, 2= dimensions of each 2D reference point (h, w)]
 
         return output, reference_points
 
