@@ -96,27 +96,30 @@ class MSDeformAttn(nn.Module):
 
         :return output                     (N, Length_{query}, C)
         """
-        N, Len_q, _ = query.shape
-        N, Len_in, _ = input_flatten.shape
-        assert (input_spatial_shapes[:, 0] * input_spatial_shapes[:, 1]).sum() == Len_in
+        N, Len_q, _ = query.shape # encoder: [B=2, S, d_model=256], which is size dBHW; decoder: [B=2, num queries = 300, d_model=256]
+        N, Len_in, _ = input_flatten.shape # [B=2, S, d_model=256]
+        assert (input_spatial_shapes[:, 0] * input_spatial_shapes[:, 1]).sum() == Len_in # input_spatial_shapes.shape = [4, 2] (the height/width shape of the 4 feature levels); # len_in is all of their pixels combnined
 
-        value = self.value_proj(input_flatten)
+        # -- split the 256 dimension into heads, feature levels and attention points (incl. their height/width dimensions) --
+        value = self.value_proj(input_flatten) # [2, S, 256]
         if input_padding_mask is not None:
-            value = value.masked_fill(input_padding_mask[..., None], float(0))
-        value = value.view(N, Len_in, self.n_heads, self.d_model // self.n_heads)
+            # input_padding_mask.shape = [2, S]
+            value = value.masked_fill(input_padding_mask[..., None], float(0)) # [..., None] makes it [2, S, 1], broadcasted to each of the dimensions [2, S, 256]; zeros-out the parts of the image outside the mask
+        value = value.view(N, Len_in, self.n_heads, self.d_model // self.n_heads) # [2, S, num_heads=8, 32] (this splits the d_model dimension into the 8 heads)
         
-        sampling_offsets = self.sampling_offsets(query).view(N, Len_q, self.n_heads, self.n_levels, self.n_points, 2)
+        sampling_offsets = self.sampling_offsets(query).view(N, Len_q, self.n_heads, self.n_levels, self.n_points, 2) # [2, S, 8, 32] -> [2, S, num_heads=8, num feature levels=4, num of attention points = 4, 2 (height/width of each attention point)]; decoder does [2, 300, 8, 32] -> [2, 300, 8, 4, 4, 2]
         
         # here are the attention weights; we want to add the ECA attention to the levels dimension
         
-        attention_weights = self.attention_weights(query).view(N, Len_q, self.n_heads, self.n_levels * self.n_points)
-        attention_weights = F.softmax(attention_weights, -1).view(N, Len_q, self.n_heads, self.n_levels, self.n_points)
+        attention_weights = self.attention_weights(query).view(N, Len_q, self.n_heads, self.n_levels * self.n_points) # [2, S, 128] -> [2, S, 8, 16] by view(); decoder: [2, 300, 128] -> [2, 300, 8, 16] by view()
+        attention_weights = F.softmax(attention_weights, -1).view(N, Len_q, self.n_heads, self.n_levels, self.n_points) # [2, S, 8, 4, 4]; decoder [2, 300, 8, 4, 4]
         
         # N, Len_q, n_heads, n_levels, n_points, 2
+        # reference_points.shape = [2, S, 4, 2]; decoder [2, 300, 4, 2]
         if reference_points.shape[-1] == 2:
-            offset_normalizer = torch.stack([input_spatial_shapes[..., 1], input_spatial_shapes[..., 0]], -1)
+            offset_normalizer = torch.stack([input_spatial_shapes[..., 1], input_spatial_shapes[..., 0]], -1) # [4, 2]
             sampling_locations = reference_points[:, :, None, :, None, :] \
-                                 + sampling_offsets / offset_normalizer[None, None, None, :, None, :]
+                                 + sampling_offsets / offset_normalizer[None, None, None, :, None, :] # [2, S/300, 1, 4, 1, 2] + [2, S/300, 8, 4, 4, 2]/[1, 1, 1, 4, 1, 2] -> [2, S/300, 8, 4, 4, 2]
         elif reference_points.shape[-1] == 4:
             sampling_locations = reference_points[:, :, None, :, None, :2] \
                                  + sampling_offsets / self.n_points * reference_points[:, :, None, :, None, 2:] * 0.5
@@ -124,6 +127,6 @@ class MSDeformAttn(nn.Module):
             raise ValueError(
                 'Last dim of reference_points must be 2 or 4, but get {} instead.'.format(reference_points.shape[-1]))
         output = MSDeformAttnFunction.apply(
-            value, input_spatial_shapes, input_level_start_index, sampling_locations, attention_weights, self.im2col_step)
-        output = self.output_proj(output)
+            value, input_spatial_shapes, input_level_start_index, sampling_locations, attention_weights, self.im2col_step) # [2, S/300, 256]
+        output = self.output_proj(output) # [2, S/300, 256]
         return output

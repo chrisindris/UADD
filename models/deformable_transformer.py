@@ -185,7 +185,7 @@ class DeformableTransformer(nn.Module):
         src_flatten = torch.cat(src_flatten, 1) # concat src_flatten (a list of feature maps) into tensor of size [B, S = sum(x' * y') for the 4 feature maps, C]
         mask_flatten = torch.cat(mask_flatten, 1) # concat mask_flatten (a list of masks) into tensor of size [B, S]
         lvl_pos_embed_flatten = torch.cat(lvl_pos_embed_flatten, 1) # flatten the embeddings into tensor of size [B, S, C]
-        spatial_shapes = torch.as_tensor(spatial_shapes, dtype=torch.long, device=src_flatten.device) # convert list of dimension tuples to a tensor of size [4, 2]=[num_feature_levels, 2 because spatial shape is size 2 (ie. height & width)]
+        spatial_shapes = torch.as_tensor(spatial_shapes, dtype=torch.long, device=src_flatten.device) # convert list of dimension tuples to a tensor of size [4, 2]=[num_feature_levels, 2 because spatial shape (ie. shape of the feature map) is size 2 (ie. height & width)]
         level_start_index = torch.cat((spatial_shapes.new_zeros((1, )), spatial_shapes.prod(1).cumsum(0)[:-1])) # to index where the levels are of the feature maps; size [4]=[num_feature_levels] (a 4-vector due to the 4 feature maps used)
         valid_ratios = torch.stack([self.get_valid_ratio(m) for m in masks], 1) # size [B=2, num_feature_levels=4, 2 because spatial shape is size 2 (ie. height & width)]
 
@@ -397,7 +397,7 @@ class DeformableTransformerDecoderLayer(nn.Module):
         # tgt: target (the bounding boxes)
         # reference points: for deformable attention
 
-        # self attention
+        # self attention (performs standard multihead attention)
         q = k = self.with_pos_embed(tgt, query_pos) # [2, 300, 256]
         tgt2 = self.self_attn(q.transpose(0, 1), k.transpose(0, 1), tgt.transpose(0, 1))[0].transpose(0, 1) # [2, 300, 256]
         tgt = tgt + self.dropout2(tgt2)
