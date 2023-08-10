@@ -8,13 +8,15 @@ sys.path.insert(1, "..")
 
 def conv1x1(in_planes, out_planes, stride=1):
     """1x1 convolution"""
+    print("1x1 out_planes=", out_planes)
     return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
 
 def conv3x3(in_planes, out_planes, stride=1, dilation=1):
     """Not used for ResNet-50"""
     """3x3 convolution with padding"""
+    print("3x3 out_planes=", out_planes)
     return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
-                     padding=dilation, bias=False, dilation=dilation)
+                     padding=1, bias=False, dilation=dilation)
 
 
 class ECABasicBlock(nn.Module):
@@ -72,7 +74,10 @@ class ECABottleneck(nn.Module):
         
         super(ECABottleneck, self).__init__()
         norm_layer = FrozenBatchNorm2d
-        width = int(planes * (base_width / 64.0)) * groups
+        print("ECABottleneck planes=", planes)
+        #width = int(planes * (base_width / 64.0)) * groups
+        width = planes
+        print("ECABottleneck width=", width)
         self.conv1 = conv1x1(inplanes, width)
         self.bn1 = norm_layer(width)
         self.conv2 = conv3x3(width, width, stride, dilation)
@@ -97,7 +102,7 @@ class ECABottleneck(nn.Module):
         # self.stride = stride
         
         self.W_ECA = None
-        self.sigmoid = nn.Sigmoid()
+        #self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
         residual = x
@@ -146,7 +151,7 @@ class ECABottleneck(nn.Module):
 class ResNet(nn.Module):
 
     # SHOULD WE USE 91 CLASSES (COCO)?
-    def __init__(self, block, layers, num_classes=1000, k_size=[3, 3, 3, 3], replace_stride_with_dilation=[False, False, True]):
+    def __init__(self, block, layers, num_classes=1000, k_size=[3, 3, 3, 3], replace_stride_with_dilation=[False, False, False]):
         """Class for the ResNet architecture
 
         Args:
@@ -167,10 +172,10 @@ class ResNet(nn.Module):
         self.bn1 = FrozenBatchNorm2d(self.inplanes)
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-        self.layer1 = self._make_layer(block, 64, layers[0], int(k_size[0]))
-        self.layer2 = self._make_layer(block, 128, layers[1], int(k_size[1]), stride=2, dilate=replace_stride_with_dilation[0])
-        self.layer3 = self._make_layer(block, 256, layers[2], int(k_size[2]), stride=2, dilate=replace_stride_with_dilation[1])
-        self.layer4 = self._make_layer(block, 512, layers[3], int(k_size[3]), stride=2, dilate=replace_stride_with_dilation[2])
+        self.layer1 = self._make_layer(block=block, planes=64, blocks=layers[0], k_size=int(k_size[0]))
+        self.layer2 = self._make_layer(block=block, planes=128, blocks=layers[1], k_size=int(k_size[1]), stride=2, dilate=replace_stride_with_dilation[0])
+        self.layer3 = self._make_layer(block=block, planes=256, blocks=layers[2], k_size=int(k_size[2]), stride=2, dilate=replace_stride_with_dilation[1])
+        self.layer4 = self._make_layer(block=block, planes=512, blocks=layers[3], k_size=int(k_size[3]), stride=2, dilate=replace_stride_with_dilation[2])
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1)) #nn.AvgPool2d(7, stride=1) # doesn't seem to affect it 
         self.fc = nn.Linear(512 * block.expansion, num_classes)
 
@@ -220,11 +225,13 @@ class ResNet(nn.Module):
             )
 
         layers = []
-        layers.append(block(self.inplanes, planes, stride, downsample, k_size, dilation=self.dilation))
+        print("planes (block 0)=", planes)
+        layers.append(block(self.inplanes, planes, stride, downsample, k_size, dilation=previous_dilation))
         self.inplanes = planes * block.expansion
         
         # within a particular layer, the residual is repeated
         for i in range(1, blocks):
+            print("planes (block 1+)=", planes)
             layers.append(block(self.inplanes, planes, k_size=k_size, dilation=self.dilation))
 
         return nn.Sequential(*layers)
@@ -257,7 +264,7 @@ class ResNet(nn.Module):
 
         x = self.avgpool(x) # average pooling
         
-        x = x.view(x.size(0), -1)
+        x = x.view(x.size(0), -1) # this is different from the official RESNET torchvision repo
         x = self.fc(x) # fully connected
 
         # ResNet x
