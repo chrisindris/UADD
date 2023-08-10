@@ -6,6 +6,9 @@ from .eca_module import eca_layer
 import sys
 sys.path.insert(1, "..")
 
+def conv1x1(in_planes, out_planes, stride=1):
+    """1x1 convolution"""
+    return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
 
 def conv3x3(in_planes, out_planes, stride=1, dilation=1):
     """Not used for ResNet-50"""
@@ -55,7 +58,7 @@ class ECABasicBlock(nn.Module):
 class ECABottleneck(nn.Module):
     expansion = 4
 
-    def __init__(self, inplanes, planes, stride=1, downsample=None, k_size=3, dilation=1):
+    def __init__(self, inplanes, planes, stride=1, downsample=None, groups=1, base_width=64, dilation=1, k_size=3):
         """Class for ECABottleneck network (the block within each conv layer)
 
         Args:
@@ -68,23 +71,33 @@ class ECABottleneck(nn.Module):
         from UADD.models.backbone import FrozenBatchNorm2d
         
         super(ECABottleneck, self).__init__()
-        self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, bias=False)
-        self.bn1 = FrozenBatchNorm2d(planes)
-        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride,
-                               padding=1, bias=False)
-        self.bn2 = FrozenBatchNorm2d(planes)
-        self.conv3 = nn.Conv2d(planes, planes * 4, kernel_size=1, bias=False)
-        self.bn3 = FrozenBatchNorm2d(planes * 4)
+        norm_layer = FrozenBatchNorm2d
+        width = int(planes * (base_width / 64.0)) * groups
+        self.conv1 = conv1x1(inplanes, width)
+        self.bn1 = norm_layer(width)
+        self.conv2 = conv3x3(width, width, stride, dilation)
+        self.bn2 = norm_layer(width)
+        self.conv3 = conv1x1(width, planes * self.expansion)
+        self.bn3 = norm_layer(planes * self.expansion)
         self.relu = nn.ReLU(inplace=True)
-        self.eca = eca_layer(planes * 4, k_size)
+        self.eca = eca_layer(planes * self.expansion, k_size)
         self.downsample = downsample
         self.stride = stride
         
+        # self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, bias=False)
+        # self.bn1 = FrozenBatchNorm2d(planes)
+        # self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride,
+        #                        padding=1, bias=False)
+        # self.bn2 = FrozenBatchNorm2d(planes)
+        # self.conv3 = nn.Conv2d(planes, planes * 4, kernel_size=1, bias=False)
+        # self.bn3 = FrozenBatchNorm2d(planes * 4)
+        # self.relu = nn.ReLU(inplace=True)
+        # self.eca = eca_layer(planes * 4, k_size)
+        # self.downsample = downsample
+        # self.stride = stride
+        
         self.W_ECA = None
         self.sigmoid = nn.Sigmoid()
-        
-    def get_W_ECA(self):
-        return self.W_ECA
 
     def forward(self, x):
         residual = x
@@ -130,44 +143,6 @@ class ECABottleneck(nn.Module):
         return out
 
 
-class ECAResNetLayer(nn.Module):
-    """My attempt at _make_layer as a class"""
-    
-    def __init__(self, block, inplanes, planes, blocks, k_size, stride=1):
-        from UADD.models.backbone import FrozenBatchNorm2d
-        
-        super(ECAResNetLayer, self).__init__()
-        self.block = block
-        self.inplanes = inplanes
-        self.planes = planes
-        self.blocks = blocks
-        self.k_size = k_size
-        self.stride = stride
-        
-        self.downsample = None
-        if self.stride != 1 or self.inplanes != self.planes * self.block.expansion:
-            self.downsample = nn.Sequential(
-                nn.Conv2d(self.inplanes, self.planes * self.block.expansion,
-                          kernel_size=1, stride=self.stride, bias=False),
-                FrozenBatchNorm2d(planes * block.expansion),
-            )
-            
-        self.layers = []
-        self.layers.append(self.block(self.inplanes, self.planes, self.stride, self.downsample, self.k_size))
-        self.inplanes = self.planes * self.block.expansion
-        
-        # within a particular layer, the residual is repeated
-        for i in range(1, self.blocks):
-            self.layers.append(self.block(self.inplanes, self.planes, k_size=self.k_size))
-            
-        self.mdls = nn.ModuleList(self.layers)
-        
-    def forward(self, x):
-        for layer in self.mdls:
-            x = layer(x)
-        return x
-        
-
 class ResNet(nn.Module):
 
     # SHOULD WE USE 91 CLASSES (COCO)?
@@ -182,20 +157,21 @@ class ResNet(nn.Module):
         """
         from UADD.models.backbone import FrozenBatchNorm2d
         
+        self.groups = 1
+        self.base_width = width_per_group = 64
         self.inplanes = 64
         self.dilation = 1
         
         super(ResNet, self).__init__()
-        self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
-                               bias=False)
-        self.bn1 = FrozenBatchNorm2d(64)
+        self.conv1 = nn.Conv2d(3, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False)
+        self.bn1 = FrozenBatchNorm2d(self.inplanes)
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.layer1 = self._make_layer(block, 64, layers[0], int(k_size[0]))
         self.layer2 = self._make_layer(block, 128, layers[1], int(k_size[1]), stride=2, dilate=replace_stride_with_dilation[0])
         self.layer3 = self._make_layer(block, 256, layers[2], int(k_size[2]), stride=2, dilate=replace_stride_with_dilation[1])
         self.layer4 = self._make_layer(block, 512, layers[3], int(k_size[3]), stride=2, dilate=replace_stride_with_dilation[2])
-        self.avgpool = nn.AvgPool2d(7, stride=1)
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1)) #nn.AvgPool2d(7, stride=1) # doesn't seem to affect it 
         self.fc = nn.Linear(512 * block.expansion, num_classes)
 
         # set the initial weights
@@ -203,7 +179,7 @@ class ResNet(nn.Module):
             if isinstance(m, nn.Conv2d):
                 n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
                 m.weight.data.normal_(0, math.sqrt(2. / n))
-            elif isinstance(m, nn.BatchNorm2d):
+            elif isinstance(m, FrozenBatchNorm2d):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
                 
@@ -227,6 +203,9 @@ class ResNet(nn.Module):
         """
         from UADD.models.backbone import FrozenBatchNorm2d
         
+        downsample = None
+        
+        previous_dilation = self.dilation
         if dilate:
             self.dilation *= stride
             stride = 1
@@ -234,8 +213,9 @@ class ResNet(nn.Module):
         downsample = None
         if stride != 1 or self.inplanes != planes * block.expansion:
             downsample = nn.Sequential(
-                nn.Conv2d(self.inplanes, planes * block.expansion,
-                          kernel_size=1, stride=stride, bias=False),
+                # nn.Conv2d(self.inplanes, planes * block.expansion,
+                #           kernel_size=1, stride=stride, bias=False),
+                conv1x1(self.inplanes, planes * block.expansion, stride),
                 FrozenBatchNorm2d(planes * block.expansion),
             )
 
@@ -322,7 +302,7 @@ def eca_resnet50(k_size=[3,3,3,3], num_classes=1000, pretrained=False):
     """
     print("Constructing eca_resnet50......")
     model = ResNet(ECABottleneck, [3, 4, 6, 3], num_classes=num_classes, k_size=k_size) # 3,4,6,3 specifies how many times to repeat conv2,3,4,5 to get 50-layer ResNet
-    model.avgpool = nn.AdaptiveAvgPool2d(1)
+    model.avgpool = nn.AdaptiveAvgPool2d((1, 1))
     return model
 
 

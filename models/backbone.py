@@ -112,7 +112,7 @@ class BackboneBase(nn.Module):
         # C = 2048
         # H,W = H0/32, W0/32        
         
-        if return_interm_layers:
+        if return_interm_layers: # true when num_feature_levels is 4
             # return_layers = {"layer1": "0", "layer2": "1", "layer3": "2", "layer4": "3"}
             return_layers = {"layer2": "0", "layer3": "1", "layer4": "2"}
             self.strides = [8, 16, 32]
@@ -221,6 +221,32 @@ class Joiner(nn.Sequential):
         # position encoding for the particular image (for what came through the backbone)
         pos = []
         for x in out:
+            # TODO: check the ECANet so that the backbone is using the correct dimensions
+            """
+            First three (default DETR):
+            x.tensors.size() = torch.Size([2, 512, 76, 106])
+            x.tensors.size() = torch.Size([2, 1024, 38, 53])
+            x.tensors.size() = torch.Size([2, 2048, 19, 27])
+            x.tensors.size() = torch.Size([2, 512, 100, 128])
+            x.tensors.size() = torch.Size([2, 1024, 50, 64])
+            x.tensors.size() = torch.Size([2, 2048, 25, 32])
+            x.tensors.size() = torch.Size([2, 512, 104, 72])
+            x.tensors.size() = torch.Size([2, 1024, 52, 36])
+            x.tensors.size() = torch.Size([2, 2048, 26, 18])
+            
+            First three (ECANet/UADD)
+            x.tensors.size() = torch.Size([2, 512, 92, 110])
+            x.tensors.size() = torch.Size([2, 1024, 46, 55])
+            x.tensors.size() = torch.Size([2, 2048, 46, 55])
+            x.tensors.size() = torch.Size([2, 512, 80, 96])
+            x.tensors.size() = torch.Size([2, 1024, 40, 48])
+            x.tensors.size() = torch.Size([2, 2048, 40, 48])
+            x.tensors.size() = torch.Size([2, 512, 72, 107])
+            x.tensors.size() = torch.Size([2, 1024, 36, 54])
+            x.tensors.size() = torch.Size([2, 2048, 36, 54])
+            """
+            
+            
             """ For each iteration:
             o = self[1](x).to(x.tensors.dtype)
             
