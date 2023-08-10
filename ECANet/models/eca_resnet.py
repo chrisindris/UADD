@@ -8,13 +8,11 @@ sys.path.insert(1, "..")
 
 def conv1x1(in_planes, out_planes, stride=1):
     """1x1 convolution"""
-    print("1x1 out_planes=", out_planes)
     return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
 
 def conv3x3(in_planes, out_planes, stride=1, dilation=1):
     """Not used for ResNet-50"""
     """3x3 convolution with padding"""
-    print("3x3 out_planes=", out_planes)
     return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
                      padding=1, bias=False, dilation=dilation)
 
@@ -74,10 +72,8 @@ class ECABottleneck(nn.Module):
         
         super(ECABottleneck, self).__init__()
         norm_layer = FrozenBatchNorm2d
-        print("ECABottleneck planes=", planes)
         #width = int(planes * (base_width / 64.0)) * groups
         width = planes
-        print("ECABottleneck width=", width)
         self.conv1 = conv1x1(inplanes, width)
         self.bn1 = norm_layer(width)
         self.conv2 = conv3x3(width, width, stride, dilation)
@@ -225,13 +221,11 @@ class ResNet(nn.Module):
             )
 
         layers = []
-        print("planes (block 0)=", planes)
         layers.append(block(self.inplanes, planes, stride, downsample, k_size, dilation=previous_dilation))
         self.inplanes = planes * block.expansion
         
         # within a particular layer, the residual is repeated
         for i in range(1, blocks):
-            print("planes (block 1+)=", planes)
             layers.append(block(self.inplanes, planes, k_size=k_size, dilation=self.dilation))
 
         return nn.Sequential(*layers)
@@ -264,7 +258,7 @@ class ResNet(nn.Module):
 
         x = self.avgpool(x) # average pooling
         
-        x = x.view(x.size(0), -1) # this is different from the official RESNET torchvision repo
+        x = x.view(x.size(0), -1) # equivalent to torch.flatten(x, 1) from the torchvision/resnet repo
         x = self.fc(x) # fully connected
 
         # ResNet x
