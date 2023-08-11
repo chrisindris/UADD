@@ -59,8 +59,8 @@ class ILG(nn.ModuleDict):
     def forward(self, x):
         out = OrderedDict()
         for name, module in self.items():
-            x = module(x)
+            x, attn_weights = module(x)
             if name in self.return_layers:
                 out_name = self.return_layers[name]
                 out[out_name] = x
-        return out, None
+        return out, attn_weights

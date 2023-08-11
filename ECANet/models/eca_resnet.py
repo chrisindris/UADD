@@ -228,7 +228,8 @@ class ResNet(nn.Module):
         for i in range(1, blocks):
             layers.append(block(self.inplanes, planes, k_size=k_size, dilation=self.dilation))
 
-        return nn.Sequential(*layers)
+        from UADD.util.sequential import Sequential
+        return Sequential(*layers)
 
     def forward(self, x):
         """Send the feature map through the ResNet.
@@ -251,10 +252,10 @@ class ResNet(nn.Module):
         # x, W_ECA = self.layer3(x, W_ECA)
         # x, W_ECA = self.layer4(x, W_ECA)
 
-        x = self.layer1(x)
-        x = self.layer2(x)
-        x = self.layer3(x)
-        x = self.layer4(x)
+        x, a = self.layer1(x)
+        x, a = self.layer2(x)
+        x, a = self.layer3(x)
+        x, a = self.layer4(x)
 
         x = self.avgpool(x) # average pooling
         
