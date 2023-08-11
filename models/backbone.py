@@ -22,7 +22,6 @@ from typing import Dict, List
 
 from util.misc import NestedTensor, is_main_process
 from .position_encoding import build_position_encoding
-from .ilg import ILG
 
 # from ECANet.models.eca_resnet import eca_resnet50 # imported below to avoid circular import
 
@@ -123,6 +122,7 @@ class BackboneBase(nn.Module):
             self.strides = [32]
             self.num_channels = [2048]
             
+        from UADD.util.ilg import ILG
         self.body = ILG(backbone, return_layers=return_layers)
 
     def forward(self, tensor_list: NestedTensor):
