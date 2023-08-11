@@ -374,7 +374,6 @@ class NestedTensor(object):
         """
         self.tensors = tensors
         self.mask = mask
-        self.attn_weights = None
 
     def to(self, device, non_blocking=False):
         # type: (Device) -> NestedTensor # noqa

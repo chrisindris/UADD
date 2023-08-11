@@ -22,6 +22,7 @@ from typing import Dict, List
 
 from util.misc import NestedTensor, is_main_process
 from .position_encoding import build_position_encoding
+from .ilg import ILG
 
 # from ECANet.models.eca_resnet import eca_resnet50 # imported below to avoid circular import
 
@@ -122,7 +123,6 @@ class BackboneBase(nn.Module):
             self.strides = [32]
             self.num_channels = [2048]
             
-        from UADD.util.ilg import ILG
         self.body = ILG(backbone, return_layers=return_layers)
 
     def forward(self, tensor_list: NestedTensor):
@@ -135,7 +135,7 @@ class BackboneBase(nn.Module):
         tensor_list.mask.size() = torch.Size([2,x,y])
         Here are the masks which go with the associated images/tensors.
         """
-        xs, attn_weights = self.body(tensor_list.tensors) # pass images through backbone to get feature maps # forward step 4: from eca_resnet50    
+        xs = self.body(tensor_list.tensors) # pass images through backbone to get feature maps # forward step 4: from eca_resnet50    
         out: Dict[str, NestedTensor] = {}
         for name, x in xs.items():
             """ For each batch:
@@ -162,7 +162,7 @@ class BackboneBase(nn.Module):
             Dictionary with keys of name (0, 1, 2) and the NestedTensor (x and mask) associated at that block
             """
             out[name] = NestedTensor(x, mask) # the feature map and the mask
-        return out, attn_weights
+        return out
 
 
 class Backbone(BackboneBase):
@@ -209,7 +209,7 @@ class Joiner(nn.Sequential):
         Consult the comments in forward() of BackboneBase for the inputs and outputs to the backbone here.
         """
         out: List[NestedTensor] = [] # a list of nested tensors.
-        xs, attn_weights = self[0](tensor_list) # send the input (images?) through the backbone.
+        xs = self[0](tensor_list) # send the input (images?) through the backbone.
 
         for name, x in sorted(xs.items()): # items() means that the dict structure of name, x becomes list of tuples
             """
@@ -260,7 +260,7 @@ class Joiner(nn.Sequential):
             """
             pos.append(self[1](x).to(x.tensors.dtype)) # the associated position
 
-        return out, pos, attn_weights # the backbone features and the encoding
+        return out, pos # the backbone features and the encoding
 
 
 def build_backbone(args):

@@ -143,7 +143,7 @@ class DeformableDETR(nn.Module):
         # -- pass through backbone (includes pos embedding) to return the feature maps and the pos embeddings --
         if not isinstance(samples, NestedTensor):
             samples = nested_tensor_from_tensor_list(samples)
-        features, pos, attn_weights = self.backbone(samples)
+        features, pos = self.backbone(samples)
         
         """
         len(features) = len(pos) = 3
