@@ -228,8 +228,9 @@ class ResNet(nn.Module):
         for i in range(1, blocks):
             layers.append(block(self.inplanes, planes, k_size=k_size, dilation=self.dilation))
 
-        #from UADD.util.sequential import Sequential
-        return nn.Sequential(*layers)
+        from UADD.util.sequential import Sequential
+        #return nn.Sequential(*layers)
+        return Sequential(*layers)
 
     def forward(self, x):
         """Send the feature map through the ResNet.

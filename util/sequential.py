@@ -183,7 +183,7 @@ class Sequential(Module):
     def forward(self, input):
         for module in self:
             input = module(input)
-        return input, None
+        return input
 
     def append(self, module: Module) -> 'Sequential':
         r"""Appends a given module to the end.
